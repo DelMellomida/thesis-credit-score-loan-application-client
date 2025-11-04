@@ -104,42 +104,55 @@ type ViewType = 'loan-process' | 'applicants-list' | 'applicant-overview';
 //   // Add more mock data as needed
 // ];
 
+import { loadFormData, saveFormData, clearFormData } from '../lib/formStorage';
+
+const INITIAL_FORM_DATA: FormData = {
+  personal: {
+    fullName: '',
+    contactNo: '',
+    address: '',
+    headOfHousehold: '',
+    dependents: '',
+    yearsLivingHere: '',
+    housingStatus: '',
+  },
+  employee: {
+    companyName: '',
+    sector: '',
+    position: '',
+    employmentDuration: '',
+    salary: '',
+    typeOfSalary: '',
+  },
+  other: {
+    communityPosition: '',
+    paluwagaParticipation: '',
+    otherIncomeSources: '',
+    disasterPreparednessStrategy: '',
+  },
+  coMaker: {
+    fullName: '',
+    contactNo: '',
+    address: '',
+    howManyMonthsYears: '',
+    salary: '',
+    relationshipWithApplicant: '',
+  },
+};
+
 export default function App() {
   const { user, loading, error } = useAuth();
   const [currentView, setCurrentView] = useState<ViewType>('loan-process');
 
-  const [formData, setFormData] = useState<FormData>({
-    personal: {
-      fullName: '',
-      contactNo: '',
-      address: '',
-      headOfHousehold: '',
-      dependents: '',
-      yearsLivingHere: '',
-      housingStatus: '',
-    },
-    employee: {
-      companyName: '',
-      sector: '',
-      position: '',
-      employmentDuration: '',
-      salary: '',
-      typeOfSalary: '',
-    },
-    other: {
-      communityPosition: '',
-      paluwagaParticipation: '',
-      otherIncomeSources: '',
-      disasterPreparednessStrategy: '',
-    },
-    coMaker: {
-      fullName: '',
-      contactNo: '',
-      address: '',
-      howManyMonthsYears: '',
-      salary: '',
-      relationshipWithApplicant: '',
-    },
+  // Initialize form data from storage or use initial data
+  const [formData, setFormData] = useState<FormData>(() => {
+    const loaded = loadFormData();
+    // debug
+    // if (loaded) {
+    //   // eslint-disable-next-line no-console
+    //   console.log('[App] Loaded form data from storage');
+    // }
+    return loaded || INITIAL_FORM_DATA;
   });
 
   // Store backend result
@@ -159,46 +172,33 @@ export default function App() {
   };
 
   const updateFormData = (section: keyof FormData, data: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [section]: { ...prev[section], ...data }
-    }));
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [section]: { ...prev[section], ...data }
+      };
+      // Save to storage whenever form is updated
+      saveFormData(newData);
+      return newData;
+    });
   };
 
+  // As a fallback, ensure any change to formData is persisted.
+  // This covers cases where child components might update values locally
+  // and the parent state is updated in a way that doesn't call updateFormData.
+  React.useEffect(() => {
+    try {
+      saveFormData(formData);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[App] Error saving formData in effect', err);
+    }
+  }, [formData]);
+
   const newApplicant = () => {
-    setFormData({
-      personal: {
-        fullName: '',
-        contactNo: '',
-        address: '',
-        headOfHousehold: '',
-        dependents: '',
-        yearsLivingHere: '',
-        housingStatus: '',
-      },
-      employee: {
-        companyName: '',
-        sector: '',
-        position: '',
-        employmentDuration: '',
-        salary: '',
-        typeOfSalary: '',
-      },
-      other: {
-        communityPosition: '',
-        paluwagaParticipation: '',
-        otherIncomeSources: '',
-        disasterPreparednessStrategy: '',
-      },
-      coMaker: {
-        fullName: '',
-        contactNo: '',
-        address: '',
-        howManyMonthsYears: '',
-        salary: '',
-        relationshipWithApplicant: '',
-      },
-    });
+    // Clear storage and reset form to initial state
+    clearFormData();
+    setFormData(INITIAL_FORM_DATA);
     setLoanResult(null);
   };
 
@@ -220,7 +220,7 @@ export default function App() {
     try {
       // Get the application using MongoDB ObjectId
       const fullApplication = await getLoanApplication(applicant.id, user?.token);
-      console.log('Full Application Data:', fullApplication);
+      // console.log('Full Application Data:', fullApplication);
       
       // Type guard function to check if response is valid
       const isValidApplication = (data: any): data is ApplicationResponse => {
@@ -258,35 +258,9 @@ export default function App() {
     }
 
     try {
-      // Create FormData instance for sending both form data and files
-      const formData = new FormData();
+      // Update local state only - the API call is already handled in ApplicantOverview
 
-      // Add form data sections
-      Object.entries(updatedData.formData).forEach(([section, data]) => {
-        formData.append(section, JSON.stringify(data));
-      });
-
-      // Add document files if present
-      if (updatedData.documents) {
-        Object.entries(updatedData.documents).forEach(([type, file]) => {
-          if (file instanceof File) {
-            formData.append(type, file);
-          }
-        });
-      }
-
-      // Add profile and ID photos if present and new
-      if (updatedData.profilePhoto instanceof File) {
-        formData.append('profile_photo', updatedData.profilePhoto);
-      }
-      if (updatedData.idPhoto instanceof File) {
-        formData.append('valid_id', updatedData.idPhoto);
-      }
-
-      // Call the update API endpoint
-      await updateLoanApplication(selectedApplicant.id, formData, user.token);
-
-      // Update local state
+      // Just update local state since the API call and toast are handled in ApplicantOverview
       setApplicants(prev =>
         prev.map(app =>
           app.id === selectedApplicant.id
@@ -294,8 +268,6 @@ export default function App() {
             : app
         )
       );
-
-      toast.success('Changes saved successfully!');
     } catch (error) {
       console.error('Failed to save application:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save changes');

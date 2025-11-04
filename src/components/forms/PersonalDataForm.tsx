@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from "react";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -18,16 +20,77 @@ interface PersonalDataFormProps {
   data: PersonalData;
   updateData: (data: Partial<PersonalData>) => void;
   onFileUpload: (type: FileType, file: File | null) => void;
+  existingFiles?: Record<string, { file: File | null; preview?: string }>;
 }
 
 interface FileUpload {
+  id: string;
   name: string;
   size: string;
   type: string;
   file: File;
+  preview?: string;
 }
 
-export function PersonalDataForm({ data, updateData, onFileUpload }: PersonalDataFormProps) {
+export function PersonalDataForm({ data, updateData, onFileUpload, existingFiles }: PersonalDataFormProps) {
+  React.useEffect(() => {
+    if (!existingFiles) return;
+    // map parent files to upload previews
+    const map: Record<string, FileUpload | null> = {
+      photo: null,
+      validId: null,
+      brgyCert: null,
+      signature: null
+    };
+    
+    if (existingFiles.profilePhoto?.file) {
+      const f = existingFiles.profilePhoto.file;
+      map.photo = { 
+        id: crypto.randomUUID(),
+        name: f.name, 
+        size: (f.size / 1024).toFixed(2) + ' KB', 
+        type: f.type, 
+        file: f,
+        preview: existingFiles.profilePhoto.preview
+      };
+    }
+    if (existingFiles.validId?.file) {
+      const f = existingFiles.validId.file;
+      map.validId = { 
+        id: crypto.randomUUID(),
+        name: f.name, 
+        size: (f.size / 1024).toFixed(2) + ' KB', 
+        type: f.type, 
+        file: f,
+        preview: existingFiles.validId.preview
+      };
+    }
+    if (existingFiles.brgyCert?.file) {
+      const f = existingFiles.brgyCert.file;
+      map.brgyCert = { 
+        id: crypto.randomUUID(),
+        name: f.name, 
+        size: (f.size / 1024).toFixed(2) + ' KB', 
+        type: f.type, 
+        file: f,
+        preview: existingFiles.brgyCert.preview
+      };
+    }
+    if (existingFiles.eSignaturePersonal?.file) {
+      const f = existingFiles.eSignaturePersonal.file;
+      map.signature = { 
+        id: crypto.randomUUID(),
+        name: f.name, 
+        size: (f.size / 1024).toFixed(2) + ' KB', 
+        type: f.type, 
+        file: f,
+        preview: existingFiles.eSignaturePersonal.preview
+      };
+    }
+    setUploads(prev => ({ ...prev, ...map }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingFiles]);
+
   const [uploads, setUploads] = useState<{
     photo: FileUpload | null;
     validId: FileUpload | null;
@@ -37,27 +100,46 @@ export function PersonalDataForm({ data, updateData, onFileUpload }: PersonalDat
     photo: null,
     validId: null,
     brgyCert: null,
-    signature: null,
+    signature: null
   });
 
   const handleInputChange = (field: keyof PersonalData, value: string) => {
     updateData({ [field]: value });
   };
 
-  const handleFileUpload = (
+  const handleFileUpload = async (
     type: "photo" | "validId" | "brgyCert" | "signature",
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
+    
     if (file) {
-      setUploads((prev) => ({
+      // Generate preview
+      let preview: string | undefined;
+      try {
+        preview = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      } catch (e) {
+        console.error('Failed to generate preview:', e);
+      }
+
+      const fileUpload: FileUpload = {
+        id: crypto.randomUUID(),
+        name: file.name,
+        size: (file.size / 1024).toFixed(2) + " KB",
+        type: file.type,
+        file: file,
+        preview
+      };
+
+      setUploads(prev => ({
         ...prev,
-        [type]: {
-          name: file.name,
-          size: (file.size / 1024).toFixed(2) + " KB",
-          type: file.type,
-          file: file,
-        },
+        [type]: fileUpload
       }));
       
       // Map the internal type names to the API's expected file names
@@ -69,13 +151,19 @@ export function PersonalDataForm({ data, updateData, onFileUpload }: PersonalDat
       };
       
       onFileUpload(fileTypeMap[type], file);
+      
+      // Debug log
+      console.log(`[PersonalDataForm] Uploaded file for ${type}:`, file.name);
     }
+    
+    // Reset input to allow uploading the same file again
+    input.value = '';
   };
 
   const removeFile = (type: "photo" | "validId" | "brgyCert" | "signature") => {
-    setUploads((prev) => ({
+    setUploads(prev => ({
       ...prev,
-      [type]: null,
+      [type]: null
     }));
     
     // Map the internal type names to the API's expected file names
@@ -87,6 +175,13 @@ export function PersonalDataForm({ data, updateData, onFileUpload }: PersonalDat
     };
     
     onFileUpload(fileTypeMap[type], null);
+    
+    // Debug log
+    console.log(`[PersonalDataForm] Removed file for ${type}`);
+    
+    // Reset the file input if it exists
+    const input = document.querySelector(`input[data-type="${type}"]`) as HTMLInputElement;
+    if (input) input.value = '';
   };
 
   const UploadButton = ({
@@ -103,6 +198,7 @@ export function PersonalDataForm({ data, updateData, onFileUpload }: PersonalDat
         <input
           type="file"
           accept={accept}
+          data-type={type}
           onChange={(e) => handleFileUpload(type, e)}
           className="hidden"
         />
@@ -113,13 +209,16 @@ export function PersonalDataForm({ data, updateData, onFileUpload }: PersonalDat
       </label>
 
       {uploads[type] && (
-        <div className="flex items-center gap-2 text-xs bg-green-50 border border-green-200 rounded-md p-2 w-[180px]">
+        <div 
+          key={uploads[type].id}
+          className="flex items-center gap-2 text-xs bg-green-50 border border-green-200 rounded-md p-2 w-[180px] mt-2"
+        >
           <Check size={14} className="text-green-600 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="truncate text-green-800 font-medium">
-              {uploads[type]!.name}
+              {uploads[type].name}
             </div>
-            <div className="text-green-600">{uploads[type]!.size}</div>
+            <div className="text-green-600">{uploads[type].size}</div>
           </div>
           <button
             onClick={() => removeFile(type)}
@@ -190,6 +289,7 @@ export function PersonalDataForm({ data, updateData, onFileUpload }: PersonalDat
         <div className="space-y-2">
           <Label htmlFor="headOfHousehold">Head of Household</Label>
           <Select
+            value={data.headOfHousehold}
             onValueChange={(value) =>
               handleInputChange("headOfHousehold", value)
             }
@@ -207,6 +307,7 @@ export function PersonalDataForm({ data, updateData, onFileUpload }: PersonalDat
         <div className="space-y-2">
           <Label htmlFor="dependents">Dependents</Label>
           <Select
+            value={data.dependents}
             onValueChange={(value) => handleInputChange("dependents", value)}
           >
             <SelectTrigger className="cursor-pointer">
@@ -240,6 +341,7 @@ export function PersonalDataForm({ data, updateData, onFileUpload }: PersonalDat
         <div className="space-y-2">
           <Label htmlFor="housingStatus">Housing Status</Label>
           <Select
+            value={data.housingStatus}
             onValueChange={(value) => handleInputChange("housingStatus", value)}
           >
             <SelectTrigger className="cursor-pointer">

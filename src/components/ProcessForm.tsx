@@ -1,4 +1,7 @@
+"use client";
+
 import React, { useEffect, useState } from "react";
+import { saveFiles, loadFiles, clearFiles } from "../lib/formStorage";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { StepProgress } from "./StepProgress";
@@ -9,6 +12,7 @@ import { CoMakerDataForm } from "./forms/CoMakerDataForm";
 import type { FormData } from "../app/page";
 import { transformLoanFormData } from "../lib/loanTransform";
 import { createLoanApplication, uploadDocuments } from "../lib/api";
+import { validateFullApplication } from "../lib/validation";
 import { toast } from 'sonner';
 
 export function ProcessForm({
@@ -39,32 +43,122 @@ export function ProcessForm({
 
   // File state management
   const [files, setFiles] = useState<{
-    profilePhoto: File | null;
-    validId: File | null;
-    brgyCert: File | null;
-    payslip: File | null;
-    companyId: File | null;
-    proofOfBilling: File | null;
-    eSignaturePersonal: File | null;
-    eSignatureCoMaker: File | null;
+    profilePhoto: { file: File | null; preview?: string };
+    validId: { file: File | null; preview?: string };
+    brgyCert: { file: File | null; preview?: string };
+    payslip: { file: File | null; preview?: string };
+    companyId: { file: File | null; preview?: string };
+    proofOfBilling: { file: File | null; preview?: string };
+    eSignaturePersonal: { file: File | null; preview?: string };
+    eSignatureCoMaker: { file: File | null; preview?: string };
   }>({
-    profilePhoto: null,
-    validId: null,
-    brgyCert: null,
-    payslip: null,
-    companyId: null,
-    proofOfBilling: null,
-    eSignaturePersonal: null,
-    eSignatureCoMaker: null
+    profilePhoto: { file: null },
+    validId: { file: null },
+    brgyCert: { file: null },
+    payslip: { file: null },
+    companyId: { file: null },
+    proofOfBilling: { file: null },
+    eSignaturePersonal: { file: null },
+    eSignatureCoMaker: { file: null }
   });
+
+  // Helpers to convert between File and dataURL
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (e) => reject(e);
+      reader.readAsDataURL(file);
+    });
+
+  const dataUrlToFile = async (dataUrl: string, name: string, type: string) => {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    return new File([blob], name, { type });
+  };
 
   // Handle file upload
   const handleFileUpload = (type: keyof typeof files, file: File | null) => {
-    setFiles(prev => ({
-      ...prev,
-      [type]: file
-    }));
+    (async () => {
+      let preview: string | undefined;
+      if (file) {
+        try {
+          preview = await fileToDataUrl(file);
+        } catch (e) {
+          console.error('Failed to generate preview for file:', e);
+        }
+      }
+      setFiles(prev => ({
+        ...prev,
+        [type]: { file, preview }
+      }));
+    })();
   };
+
+  // Load any saved files on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = loadFiles();
+        if (!saved) return;
+        const newFiles: Record<string, { file: File | null; preview?: string }> = {};
+        for (const [key, meta] of Object.entries(saved)) {
+          if (meta?.dataUrl) {
+            try {
+              const file = await dataUrlToFile(meta.dataUrl, meta.name, meta.type);
+              newFiles[key] = { file, preview: meta.dataUrl };
+            } catch (e) {
+              newFiles[key] = { file: null };
+            }
+          } else {
+            newFiles[key] = { file: null };
+          }
+        }
+        setFiles(prev => ({ ...prev, ...newFiles }));
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[ProcessForm] Error loading saved files', err);
+      }
+    })();
+    // only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist files to storage whenever they change (debounced)
+  useEffect(() => {
+    let mounted = true;
+    const save = async () => {
+      try {
+        const entries: Record<string, { name: string; type: string; size: number; dataUrl: string } | null> = {};
+        await Promise.all(
+          Object.entries(files).map(async ([key, value]) => {
+            const { file, preview } = value;
+            if (file && preview) {
+              entries[key] = { 
+                name: file.name, 
+                type: file.type, 
+                size: file.size, 
+                dataUrl: preview 
+              };
+            } else {
+              entries[key] = null;
+            }
+          })
+        );
+        if (mounted) saveFiles(entries);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[ProcessForm] Error saving files to storage', err);
+      }
+    };
+
+    // small debounce to avoid excessive writes
+    const id = setTimeout(save, 250);
+    return () => {
+      mounted = false;
+      clearTimeout(id);
+    };
+  }, [files]);
 
   // Submit handler
   interface ApplicationResponse {
@@ -74,6 +168,7 @@ export function ProcessForm({
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
+
     setIsSubmitting(true);
     try {
       // Create FormData with both application data and files
@@ -81,23 +176,33 @@ export function ProcessForm({
 
       // Add the request data
       const payload = transformLoanFormData(formData);
+        const validation = validateFullApplication(payload);
+        if (!validation.valid) {
+          toast.error('Validation failed', { description: validation.errors.join('; ') });
+          setIsSubmitting(false);
+          return;
+        }
       formDataToSend.append('request_data', JSON.stringify(payload));
 
-      // Add all files
-      Object.entries(files).forEach(([key, file]) => {
-        if (file) {
-          formDataToSend.append(key, file as File);
+      // Add files that are present (now optional)
+      Object.entries(files).forEach(([key, value]) => {
+        if (value.file) {
+          formDataToSend.append(key, value.file);
         } else {
-          // If file is missing, add an empty blob to satisfy the required field
-          formDataToSend.append(key, new Blob([''], { type: 'application/octet-stream' }));
+          // Add null for missing files to ensure backend receives the field
+          formDataToSend.append(key, '');
         }
       });
 
       // Send everything in one request
       const result = (await createLoanApplication(formDataToSend, token)) as ApplicationResponse;
 
-  setLoanResult(result);
-  toast.success('Loan application created successfully');
+      // Set result and show success message
+      setLoanResult(result);
+      toast.success('Loan application created successfully');
+
+      // Clear all form data and files
+      handleNewApplicant();  // This will clear form data and navigate to step 1
     } catch (err: any) {
       console.error('Create application failed:', err);
   const message = err?.message || (typeof err === 'string' ? err : 'Failed to create loan application');
@@ -115,6 +220,18 @@ export function ProcessForm({
   const handleNewApplicant = () => {
     setCurrentStep(1); // Reset to step 1
     newApplicant(); // Clear form data
+    // clear files both in state and storage
+    setFiles({
+      profilePhoto: { file: null },
+      validId: { file: null },
+      brgyCert: { file: null },
+      payslip: { file: null },
+      companyId: { file: null },
+      proofOfBilling: { file: null },
+      eSignaturePersonal: { file: null },
+      eSignatureCoMaker: { file: null }
+    });
+    clearFiles();
   };
 
   // ✅ Keyboard shortcuts
@@ -153,6 +270,7 @@ export function ProcessForm({
             data={formData.personal}
             updateData={(data) => updateFormData("personal", data)}
             onFileUpload={handleFileUpload}
+            existingFiles={files}
           />
         );
       case 2:
@@ -161,6 +279,7 @@ export function ProcessForm({
             data={formData.employee}
             updateData={(data) => updateFormData("employee", data)}
             onFileUpload={handleFileUpload}
+            existingFiles={files}
           />
         );
       case 3:
@@ -169,6 +288,7 @@ export function ProcessForm({
             data={formData.other}
             updateData={(data) => updateFormData("other", data)}
             onFileUpload={handleFileUpload}
+            existingFiles={files}
           />
         );
       case 4:
@@ -177,6 +297,7 @@ export function ProcessForm({
             data={formData.coMaker}
             updateData={(data) => updateFormData("coMaker", data)}
             onFileUpload={handleFileUpload}
+            existingFiles={files}
           />
         );
       default:

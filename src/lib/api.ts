@@ -31,7 +31,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...((options.headers as RequestHeaders) || {})
   };
 
-  // Format Authorization header if present
+  // Format Authorization header if present (do not log sensitive token values)
   if (headers.Authorization) {
     const token = headers.Authorization;
     if (!token) {
@@ -40,7 +40,6 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       // Add Bearer prefix if not already present
       const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       headers.Authorization = formattedToken;
-      // console.log('Using Authorization header:', headers.Authorization.substring(0, 20) + '...');
     }
   }
 
@@ -48,13 +47,6 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const executeRequest = async (shouldRefresh = true): Promise<T> => {
     const requestUrl = `${API_URL}${endpoint}`;
     const hasAuth = 'Authorization' in headers;
-
-    // console.log('Making request:', {
-    //   url: requestUrl,
-    //   method: options.method || 'GET',
-    //   hasAuth,
-    //   authType: hasAuth ? headers.Authorization?.split(' ')[0] : undefined
-    // });
 
     try {
       // Add comprehensive cache-busting for document URLs
@@ -82,13 +74,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
         credentials: 'include',
       });
 
-      // Log response status and headers for debugging
-      // console.log('Response received:', {
-      //   url: endpoint,
-      //   status: response.status,
-      //   ok: response.ok,
-      //   contentType: response.headers.get('content-type')
-      // });
+      // Response received - avoid logging potentially sensitive headers or tokens
 
       if (!response.ok) {
         // Handle 401 Unauthorized with token refresh
@@ -131,7 +117,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
             // Retry the original request with the new token
             return executeRequest(false);
           } catch (error) {
-            // console.error('Token refresh failed:', error);
+            console.error('Token refresh failed:', error);
             throw error;
           }
         }
@@ -148,28 +134,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
           errorData = { message: response.statusText };
         }
 
-        // console.error('API Error:', {
-        //   status: response.status,
-        //   statusText: response.statusText,
-        //   error: errorData
-        // });
+        console.error('API Error: status=' + response.status + ' statusText=' + response.statusText);
 
         throw new Error(errorData.detail || errorData.message || 'API error');
       }
 
       const data = await response.json();
-      // console.log('API Success:', {
-      //   endpoint,
-      //   status: response.status,
-      //   dataType: typeof data
-      // });
-
       return data;
     } catch (error) {
-      // console.error('Request failed:', {
-      //   url: endpoint,
-      //   error: error instanceof Error ? error.message : (error ? String(error) : 'Unknown error')
-      // });
+      console.error('Request failed: ' + (error instanceof Error ? error.message : (error ? String(error) : 'Unknown error')));
       throw error;
     }
   };
@@ -188,7 +161,7 @@ export async function login(username: string, password: string) {
     grant_type: 'password'  // Required for OAuth2 password flow
   });
 
-  // console.log('Attempting login with username:', username);
+  // Attempting login
 
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
@@ -212,21 +185,13 @@ export async function login(username: string, password: string) {
       error = { message: res.statusText };
     }
 
-    // console.error('Login failed:', {
-    //   status: res.status,
-    //   statusText: res.statusText,
-    //   error
-    // });
+    console.error('Login failed: status=' + res.status + ' statusText=' + res.statusText);
 
     throw new Error(error.detail || error.message || 'Login failed');
   }
 
   const data = await res.json();
-  // console.log('Login response:', {
-  //   tokenType: data.token_type,
-  //   hasToken: !!data.access_token,
-  //   expiresIn: data.expires_in
-  // });
+  // Do not log tokens or sensitive login response data
 
   return data;
 }
@@ -241,24 +206,13 @@ export async function signup(email: string, full_name: string, password: string)
 // Loan application endpoints
 export async function createLoanApplication(data: FormData, token?: string) {
   if (!token) {
-    // console.error('No token provided to createLoanApplication');
+    console.error('No token provided to createLoanApplication');
     throw new Error('Authentication required');
   }
 
   // Remove any existing 'Bearer ' prefix
   const cleanToken = token.replace(/^Bearer\s+/i, '');
-  // console.log('Creating loan application with token:', cleanToken.substring(0, 15) + '...');
-
-  // Log the FormData contents for debugging
-  // console.log('FormData contents:');
-  // for (const [key, value] of data.entries()) {
-  //   if (value instanceof File) {
-  //     console.log(`${key}: File - ${value.name} (${value.size} bytes)`);
-  //   } else {
-  //     const valueStr = typeof value === 'string' ? value : 'Blob/File data';
-  //     console.log(`${key}: ${valueStr}`);
-  //   }
-  // }
+  // Do not log tokens or FormData contents (may contain PII)
   
   return request('/loans/applications', {
     method: 'POST',
@@ -274,7 +228,6 @@ export async function getMyApplications(token?: string) {
     method: 'GET',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  // console.log('Raw Backend Response:', JSON.stringify(response, null, 2));
   return response.map(transformToApplicant);
 }
 
@@ -297,25 +250,36 @@ interface PaginatedResponse<T> {
 export async function getAllApplications(
   token?: string, 
   page: number = 1, 
-  pageSize: number = 10
+  pageSize: number = 10,
+  status?: string,
+  search?: string
 ): Promise<PaginatedResponse<Applicant>> {
   if (!token) {
-    // console.error('No token provided to getAllApplications');
+    console.error('No token provided to getAllApplications');
     throw new Error('Authentication required');
   }
 
   const skip = (page - 1) * pageSize;
-  // console.log('Fetching applications:', { page, pageSize, skip });
+  
+  // Build query string with filters
+  const params = new URLSearchParams({
+    skip: skip.toString(),
+    limit: pageSize.toString()
+  });
+
+  // Add optional filters
+  if (status && status !== 'all') {
+    params.append('status', status);
+  }
+  if (search) {
+    params.append('search', search);
+  }
 
   // Use token directly without modification - let the request helper handle Bearer prefix
   const headers = {
     'Authorization': token,
     'Accept': 'application/json'
   };
-  // console.log('Request headers:', {
-  //   hasAuth: 'Authorization' in headers,
-  //   tokenValue: token
-  // });
 
   try {
     const response = await request<{
@@ -324,19 +288,12 @@ export async function getAllApplications(
       page: number;
       pages: number;
       counts: StatusCounts;
-    }>(`/loans/applications?skip=${skip}&limit=${pageSize}`, {
+    }>(`/loans/applications?${params.toString()}`, {
       method: 'GET',
       headers
     });
 
-    // console.log('Raw Backend Response for getAllApplications:', JSON.stringify(response.data, null, 2));
-    // console.log('Applications response:', {
-    //   success: true,
-    //   total: response.total,
-    //   currentPage: response.page,
-    //   totalPages: response.pages,
-    //   currentCount: response.data.length
-    // });
+    // Successfully fetched applications
 
     return {
       data: response.data.map(transformToApplicant),
@@ -346,10 +303,7 @@ export async function getAllApplications(
       counts: response.counts
     };
   } catch (error) {
-    // console.error('Error fetching applications:', {
-    //   error: error instanceof Error ? error.message : 'Unknown error',
-    //   token: token.substring(0, 15) + '...'
-    // });
+    console.error('Error fetching applications:', error instanceof Error ? error.message : 'Unknown error');
     throw error instanceof Error ? error : new Error('Failed to fetch applications');
   }
 }
@@ -373,12 +327,7 @@ export async function updateApplicationStatus(
     throw new Error(`Invalid status. Valid statuses are: ${Object.keys(validStatuses).join(', ')}`);
   }
 
-  // console.log('Sending status update:', {
-  //   applicationId,
-  //   originalStatus: status,
-  //   mappedStatus,
-  //   hasToken: !!token
-  // });
+  // Sending status update (no sensitive logging)
 
   try {
     const response = await request(`/loans/applications/${applicationId}/status`, {
@@ -390,7 +339,7 @@ export async function updateApplicationStatus(
     });
     return response;
   } catch (error) {
-    // console.error('Status update error:', error);
+    console.error('Status update error:', error);
     if (error instanceof Error) {
       throw new Error(error.message || 'Failed to update application status');
     }
@@ -400,11 +349,11 @@ export async function updateApplicationStatus(
 
 export async function getLoanApplication(applicationId: string, token?: string) {
   if (!token) {
-    // console.error('No token provided to getLoanApplication');
+    console.error('No token provided to getLoanApplication');
     throw new Error('Authentication required');
   }
 
-  // console.log('Fetching full application details:', { applicationId });
+  // Fetching full application details
 
   // Use token directly - let request helper handle Bearer prefix
   const headers = {
@@ -419,7 +368,7 @@ export async function getLoanApplication(applicationId: string, token?: string) 
       headers
     });
 
-    // console.log('Raw application details response:', JSON.stringify(applicationData, null, 2));
+  // Received application details
 
     try {
       // Then get the document URLs
@@ -429,7 +378,7 @@ export async function getLoanApplication(applicationId: string, token?: string) 
           method: 'GET',
           headers
         });
-        // console.log('Document URLs fetched:', documentData);
+  // Document URLs fetched
 
         // Combine the data
         return {
@@ -437,7 +386,7 @@ export async function getLoanApplication(applicationId: string, token?: string) 
           documents: documentData
         };
       } catch (docError) {
-        // console.log('No documents found, using empty document object');
+  // No documents found
         // Return empty document URLs if request fails
         return {
           ...applicationData,
@@ -454,14 +403,11 @@ export async function getLoanApplication(applicationId: string, token?: string) 
         };
       }
     } catch (docError) {
-      // console.error('Failed to fetch application details:', docError);
+      console.error('Failed to fetch application details:', docError);
       throw docError instanceof Error ? docError : new Error('Failed to fetch application details');
     }
   } catch (error) {
-    // console.error('Error fetching application details:', {
-    //   error: error instanceof Error ? error.message : 'Unknown error',
-    //   token: token.substring(0, 15) + '...'
-    // });
+    console.error('Error fetching application details:', error instanceof Error ? error.message : 'Unknown error');
     throw error instanceof Error ? error : new Error('Failed to fetch application details');
   }
 }
@@ -483,24 +429,30 @@ export async function updateLoanApplication(
   token?: string
 ) {
   if (!token) {
-    // console.error('No token provided to updateLoanApplication');
+    console.error('No token provided to updateLoanApplication');
     throw new Error('Authentication required');
   }
 
   // Remove any existing 'Bearer ' prefix
   const cleanToken = token.replace(/^Bearer\s+/i, '');
-  // console.log('Updating loan application with token:', cleanToken.substring(0, 15) + '...');
+  // Updating loan application (no sensitive logging)
+
+  // Ensure request_data exists in FormData
+  let hasRequestData = false;
+  for (const [key] of data.entries()) {
+    if (key === 'request_data') {
+      hasRequestData = true;
+      break;
+    }
+  }
+
+  if (!hasRequestData) {
+    console.error('request_data is missing from FormData');
+    throw new Error('request_data is required for updating loan application');
+  }
 
   // Log the FormData contents for debugging
-  // console.log('FormData contents:');
-  // for (const [key, value] of data.entries()) {
-  //   if (value instanceof File) {
-  //     console.log(`${key}: File - ${value.name} (${value.size} bytes)`);
-  //   } else {
-  //     const valueStr = typeof value === 'string' ? value : 'Blob/File data';
-  //     console.log(`${key}: ${valueStr}`);
-  //   }
-  // }
+  // Do not log FormData contents (may contain PII)
   
   return request(`/loans/applications/${applicationId}`, {
     method: 'PUT',
@@ -530,24 +482,13 @@ export async function deleteLoanApplication(applicationId: string, token?: strin
 // Document management endpoints
 export async function uploadDocuments(applicationId: string, files: FormData, token?: string) {
   if (!token) {
-    // console.error('No token provided to uploadDocuments');
+    console.error('No token provided to uploadDocuments');
     throw new Error('Authentication required');
   }
 
   // Remove any existing 'Bearer ' prefix
   const cleanToken = token.replace(/^Bearer\s+/i, '');
-  // console.log('Uploading documents with token:', cleanToken.substring(0, 15) + '...');
-  
-  // Log FormData contents for debugging
-  // console.log('FormData contents for document upload:');
-  // for (const [key, value] of files.entries()) {
-  //   if (value instanceof File) {
-  //     console.log(`${key}: File - ${value.name} (${value.size} bytes)`);
-  //   } else {
-  //     const valueStr = typeof value === 'string' ? value : 'Blob/File data';
-  //     console.log(`${key}: ${valueStr}`);
-  //   }
-  // }
+  // Uploading documents (do not log tokens or file contents)
 
   // Ensure we have a fresh URL each time
   const timestamp = Date.now();
@@ -572,7 +513,7 @@ export async function getDocument(documentId: string, token?: string) {
 
 export async function getApplicationDocuments(applicationId: string, token?: string) {
   if (!token) {
-    // console.error('No token provided to getApplicationDocuments');
+    console.error('No token provided to getApplicationDocuments');
     throw new Error('Authentication required to fetch application documents');
   }
   try {
@@ -581,7 +522,7 @@ export async function getApplicationDocuments(applicationId: string, token?: str
       headers: { Authorization: `Bearer ${token}` },
     });
   } catch (error) {
-    // console.log('No documents found for application, returning empty document object');
+    console.log('No documents found for application, returning empty document object');
     // Return empty document URLs if request fails
     return {
       brgy_cert_url: null,
@@ -598,7 +539,7 @@ export async function getApplicationDocuments(applicationId: string, token?: str
 
 export async function updateDocuments(documentId: string, files: FormData, token?: string) {
   if (!token) {
-    // console.error('No token provided to updateDocuments');
+    console.error('No token provided to updateDocuments');
     throw new Error('Authentication required');
   }
 
@@ -640,7 +581,7 @@ export async function refreshApplicationDocumentUrls(
   token?: string
 ) {
   if (!token) {
-    // console.error('No token provided to refreshApplicationDocumentUrls');
+    console.error('No token provided to refreshApplicationDocumentUrls');
     throw new Error('Authentication required');
   }
 

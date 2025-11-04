@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     try {
       const res = await apiLogin(username, password);
-      console.log('Auth response:', res);
+      // console.log('Auth response:', res);
       
       // Make sure we have a token
       if (!res.access_token) {

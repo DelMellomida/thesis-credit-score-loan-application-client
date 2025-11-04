@@ -69,10 +69,11 @@ export function ApplicantsList({
   });
   const itemsPerPage = 6;
 
-  // Debug logs
+  // Monitor auth state changes
   useEffect(() => {
-    // console.log('Auth User:', user);
-    // console.log('Auth Token:', user?.token);
+    if (!user) {
+      setError('Authentication required');
+    }
   }, [user]);
 
   // Fetch applications with total count
@@ -82,25 +83,14 @@ export function ApplicantsList({
       setIsLoading(true);
       setError(null);
       
-      // Log fetch attempt
-      console.log('Fetching applications:', {
-        page: currentPage,
-        pageSize: itemsPerPage,
-        hasToken: !!token
-      });
-
       // Get paginated data with metadata and counts (already sorted by timestamp from backend)
-      const { data, total, pages, counts } = await getAllApplications(token, currentPage, itemsPerPage);
-      
-      // Log received data
-      // console.log('Received applications:', {
-      //   currentPage,
-      //   receivedCount: data.length,
-      //   total,
-      //   totalPages: pages,
-      //   counts,
-      //   latestTimestamp: data[0]?.timestamp
-      // });
+      const { data, total, pages, counts } = await getAllApplications(
+        token, 
+        currentPage, 
+        itemsPerPage,
+        statusFilter !== 'all' ? statusFilter : undefined,
+        searchQuery || undefined
+      );
 
       // Update states with paginated data and total counts
       setApplicants(data);
@@ -114,16 +104,7 @@ export function ApplicantsList({
       });
 
     } catch (error) {
-      console.error('Failed to fetch applications:', error);
-      
-      // Detailed error logging
-      // console.log('Error details:', {
-      //   error,
-      //   message: error instanceof Error ? error.message : 'Unknown error',
-      //   type: error instanceof Error ? error.constructor.name : typeof error,
-      //   hasToken: !!token,
-      //   currentPage
-      // });
+      console.error('Failed to fetch applications');
       
       if (!token) {
         setError('Authentication required. Please log in.');
@@ -137,16 +118,16 @@ export function ApplicantsList({
     }
   };
 
-  // Initial fetch and refresh on page change
+  // Fetch data when page, filters, or search changes
   useEffect(() => {
     if (!user?.token) {
       setError('Authentication required. Please log in.');
       return;
     }
 
-    // console.log('Fetching page:', currentPage);
+    // Fetch data with current filters
     fetchApplications();
-  }, [currentPage, user?.token]);
+  }, [currentPage, statusFilter, searchQuery, user?.token]);
 
   // Handle approve/deny actions
   const handleApprove = async (id: string) => {
@@ -159,16 +140,11 @@ export function ApplicantsList({
     try {
       setIsLoading(true);
       setError(null);
-      // console.log('Approving application with token:', !!token);
+      // Process approval request
       await updateApplicationStatus(id, 'approved', token);
       await fetchApplications(); // Refresh the list
     } catch (error) {
-      console.error('Failed to approve application:', error);
-      // Log the full error response if available
-      if (error instanceof Response) {
-        const errorText = await error.text();
-        console.error('Full error response:', errorText);
-      }
+      console.error('Application approval failed');
       if (error instanceof Error && error.message.includes('Not authenticated')) {
         setError('Please log in to approve applications.');
       } else {
@@ -189,11 +165,11 @@ export function ApplicantsList({
     try {
       setIsLoading(true);
       setError(null);
-      // console.log('Denying application with token:', !!token);
+      // Process denial request
       await updateApplicationStatus(id, 'denied', token);
       await fetchApplications(); // Refresh the list
     } catch (error) {
-      console.error('Failed to deny application:', error);
+      console.error('Application denial failed');
       if (error instanceof Error && error.message.includes('Not authenticated')) {
         setError('Please log in to deny applications.');
       } else {
@@ -214,11 +190,11 @@ export function ApplicantsList({
     try {
       setIsLoading(true);
       setError(null);
-      // console.log('Cancelling application with token:', !!token);
+      // Process cancellation request
       await updateApplicationStatus(id, 'cancelled', token);
       await fetchApplications(); // Refresh the list
     } catch (error) {
-      console.error('Failed to cancel application:', error);
+        console.error('Application cancellation failed');
       if (error instanceof Error && error.message.includes('Not authenticated')) {
         setError('Please log in to cancel applications.');
       } else {
@@ -236,43 +212,12 @@ export function ApplicantsList({
   const cancelledCount = totalStats.cancelled;
   const pendingCount = totalStats.pending;
 
-  // Filter applicants based on search query and status
-  const filteredApplicants = useMemo(() => {
-    let filtered = applicants;
-    
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(applicant => 
-        applicant.status.toLowerCase() === statusFilter.toLowerCase()
-      );
-    }
-    
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(applicant =>
-        applicant.name.toLowerCase().includes(query) ||
-        applicant.email.toLowerCase().includes(query) ||
-        applicant.loanProduct.toLowerCase().includes(query) ||
-        applicant.loanAmount.toLowerCase().includes(query)
-      );
-    }
-    
-    return filtered;
-  }, [applicants, searchQuery, statusFilter]);
-
   // State for total pages
   const [totalPages, setTotalPages] = useState(1);
 
-  // Use the filtered or full list based on search
-  const currentApplicants = filteredApplicants;
+  // Filtered results are now handled by the backend
+  const currentApplicants = applicants;
   
-  // console.log('Pagination Debug:', {
-  //   currentPageItems: currentApplicants.length,
-  //   itemsPerPage,
-  //   totalPages,
-  //   currentPage,
-  // });
 
   // Reset to page 1 when search changes
   React.useEffect(() => {
