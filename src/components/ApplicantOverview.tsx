@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
@@ -1210,17 +1211,29 @@ export function ApplicantOverview({
                   </div>
                   <div className="col-span-2">
                     <Label>Other Income Sources</Label>
-                    <Input
-                      value={editableData.other.otherIncomeSources}
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors"
+                      value={editableData.other.otherIncomeSources || "None"}
                       onChange={(e) => handleInputChange('other', 'otherIncomeSources', e.target.value)}
-                    />
+                    >
+                      <option value="None">None</option>
+                      <option value="OFW Remittance">OFW Remittance</option>
+                      <option value="Freelance">Freelance</option>
+                      <option value="Business">Business</option>
+                    </select>
                   </div>
                   <div className="col-span-2">
                     <Label>Disaster Preparedness Strategy</Label>
-                    <Input
-                      value={editableData.other.disasterPreparednessStrategy}
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors"
+                      value={editableData.other.disasterPreparednessStrategy || "None"}
                       onChange={(e) => handleInputChange('other', 'disasterPreparednessStrategy', e.target.value)}
-                    />
+                    >
+                      <option value="None">None</option>
+                      <option value="Savings">Savings</option>
+                      <option value="Insurance">Insurance</option>
+                      <option value="Community Plan">Community Plan</option>
+                    </select>
                   </div>
                 </div>
               </div>
@@ -1274,10 +1287,16 @@ export function ApplicantOverview({
                   </div>
                   <div className="col-span-2">
                     <Label>Relationship with Applicant</Label>
-                    <Input
-                      value={editableData.coMaker.relationshipWithApplicant}
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors"
+                      value={editableData.coMaker.relationshipWithApplicant || "Friend"}
                       onChange={(e) => handleInputChange('coMaker', 'relationshipWithApplicant', e.target.value)}
-                    />
+                    >
+                      <option value="Friend">Friend</option>
+                      <option value="Spouse">Spouse</option>
+                      <option value="Sibling">Sibling</option>
+                      <option value="Parent">Parent</option>
+                    </select>
                   </div>
                 </div>
               </div>

@@ -1,13 +1,6 @@
 import React from 'react';
 import { Label } from '@/components/ui/label';
 import { validPositions, Position } from '@/lib/positionValidation';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface PositionFieldProps {
   value: Position;
@@ -23,18 +16,17 @@ export function PositionField({
   return (
     <div>
       <Label>{label}</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select a position" />
-        </SelectTrigger>
-        <SelectContent>
-          {Object.values(validPositions).map((position) => (
-            <SelectItem key={position} value={position}>
-              {position}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <select
+        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors"
+        value={value}
+        onChange={(e) => onChange(e.target.value as Position)}
+      >
+        {Object.values(validPositions).map((position) => (
+          <option key={position} value={position}>
+            {position}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
