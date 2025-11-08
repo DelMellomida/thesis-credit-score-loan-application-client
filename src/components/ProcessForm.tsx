@@ -184,14 +184,12 @@ export function ProcessForm({
         }
       formDataToSend.append('request_data', JSON.stringify(payload));
 
-      // Add files that are present (now optional)
+      // Only add files that are present, skip empty ones
       Object.entries(files).forEach(([key, value]) => {
         if (value.file) {
           formDataToSend.append(key, value.file);
-        } else {
-          // Add null for missing files to ensure backend receives the field
-          formDataToSend.append(key, '');
         }
+        // Don't append anything for missing files
       });
 
       // Send everything in one request
@@ -205,8 +203,26 @@ export function ProcessForm({
       handleNewApplicant();  // This will clear form data and navigate to step 1
     } catch (err: any) {
       console.error('Create application failed:', err);
-  const message = err?.message || (typeof err === 'string' ? err : 'Failed to create loan application');
-  toast.error('Error', { description: message });
+      let errorMessage = 'Failed to create loan application';
+      
+      // Try to extract a meaningful error message
+      if (err.message) {
+        try {
+          // Check if the error message is JSON
+          const parsed = JSON.parse(err.message);
+          errorMessage = parsed.detail || parsed.message || err.message;
+        } catch {
+          // If not JSON, use the error message directly
+          errorMessage = err.message;
+        }
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      
+      toast.error('Error', { 
+        description: errorMessage,
+        duration: 5000  // Show error for 5 seconds
+      });
       setLoanResult(null);
     } finally {
       setIsSubmitting(false);

@@ -142,7 +142,7 @@ const INITIAL_FORM_DATA: FormData = {
 
 export default function App() {
   const { user, loading, error } = useAuth();
-  const [currentView, setCurrentView] = useState<ViewType>('loan-process');
+  const [currentView, setCurrentView] = useState<ViewType>('applicants-list');
 
   // Initialize form data from storage or use initial data
   const [formData, setFormData] = useState<FormData>(() => {

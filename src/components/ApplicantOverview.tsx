@@ -487,20 +487,29 @@ export function ApplicantOverview({
     }
   };
 
-  const handleFileUpload = async (type: 'profile' | 'id' | keyof typeof documents, e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (type: 'profile' | 'id' | keyof typeof documents, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !applicationUUID || !user?.token) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error("Invalid file type", {
-        description: "Please upload an image file (JPEG, PNG, etc.)",
+    // Validate file size (5MB limit)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("File too large", {
+        description: "Please upload a file smaller than 5MB",
         duration: 3000,
       });
       return;
     }
 
-    const fieldMap: Record<string, string> = {
+    // Validate file type and create metadata
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Invalid file type", {
+        description: "Please upload an image file (JPEG, PNG) or PDF",
+        duration: 3000,
+      });
+      return;
+    }    const fieldMap: Record<string, string> = {
       'profile': 'profilePhoto',
       'id': 'validId',
       'brgyCert': 'brgyCert',
@@ -525,7 +534,20 @@ export function ApplicantOverview({
     const fieldName = fieldMap[type];
     const docType = docFieldMap[type];
     const formData = new FormData();
+    
+    // Create document metadata
+    const metadata = {
+      documentType: docType,
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type,
+      applicationId: applicationUUID,
+      uploadTimestamp: new Date().toISOString()
+    };
+    
+    // Append both file and metadata
     formData.append(fieldName, file);
+    formData.append(`${fieldName}_metadata`, JSON.stringify(metadata));
     
     // Create temporary preview
     const tempObjectUrl = URL.createObjectURL(file);
@@ -552,8 +574,22 @@ export function ApplicantOverview({
         setDocumentPreviews(prev => ({ ...prev, [type]: tempObjectUrl }));
       }
 
-      // Upload the file - this handles both delete and upload
-      await uploadDocuments(applicationUUID, formData, user.token);
+      // Upload the file with retry logic
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          const response = await uploadDocuments(applicationUUID, formData, user.token);
+          if (!response) throw new Error('Upload failed - no response');
+          break; // Success - exit retry loop
+        } catch (uploadError) {
+          retryCount++;
+          if (retryCount === maxRetries) throw uploadError;
+          // Exponential backoff
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+        }
+      }
       
       // Wait for processing
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -628,6 +664,7 @@ export function ApplicantOverview({
       toast.success("Document uploaded successfully", {
         id: toastId,
         description: "File has been processed and saved",
+        duration: 4000
       });
 
       // Force a re-render by triggering a state update

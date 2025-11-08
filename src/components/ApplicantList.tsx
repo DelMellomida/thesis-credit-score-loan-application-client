@@ -118,16 +118,28 @@ export function ApplicantsList({
     }
   };
 
-  // Fetch data when page, filters, or search changes
+  // Debounce search query changes
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300); // Wait 300ms after last change before updating
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Combined fetch effect with proper dependencies
   useEffect(() => {
     if (!user?.token) {
       setError('Authentication required. Please log in.');
       return;
     }
 
-    // Fetch data with current filters
-    fetchApplications();
-  }, [currentPage, statusFilter, searchQuery, user?.token]);
+    if (!isLoading) {
+      fetchApplications();
+    }
+  }, [user?.token, currentPage, statusFilter, debouncedSearch]);
 
   // Handle approve/deny actions
   const handleApprove = async (id: string) => {

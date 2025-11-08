@@ -67,7 +67,7 @@ export function Header({ currentView, onToggleView }: HeaderProps) {
                   className="w-full flex items-center gap-2 text-blue-600 border-blue-600 hover:bg-blue-50 cursor-pointer"
                 >
                   <ButtonIcon className="h-4 w-4" />
-                  {buttonText}
+                  {currentView === 'loan-process' ? 'View Applicants List' : 'New Application'}
                 </Button>
                 <Button
                   onClick={handleLogout}

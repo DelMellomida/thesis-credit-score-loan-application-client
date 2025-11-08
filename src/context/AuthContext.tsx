@@ -82,7 +82,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     try {
       const res = await apiLogin(username, password);
-      // console.log('Auth response:', res);
       
       // Make sure we have a token
       if (!res.access_token) {
@@ -96,8 +95,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser({
         email: username,
         full_name: res.full_name || username,
-        token: token, // Store just the raw token value
+        token: token,
       });
+
+      // Add a success toast
+      toast.success('Login successful! Welcome back.');
+
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Login failed');

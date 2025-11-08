@@ -1,7 +1,7 @@
 import type { Applicant } from '@/components/ApplicantList';
 import type { ApplicationResponse, ModelInputData } from './types';
 
-export function transformToApplicant(application: ApplicationResponse & { documents?: Record<string, string | null> }): Applicant {
+export function transformToApplicant(application: ApplicationResponse): Applicant {
   // Get the MongoDB _id from the response
   const id = application._id?.$oid || '';
 

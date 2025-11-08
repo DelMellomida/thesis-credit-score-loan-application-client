@@ -585,23 +585,44 @@ export async function refreshApplicationDocumentUrls(
     throw new Error('Authentication required');
   }
 
-  const timestamp = Date.now(); // Add timestamp to prevent caching
-  const queryString = documentTypes?.length 
-    ? `?document_types=${documentTypes.join(',')}&t=${timestamp}`
-    : `?t=${timestamp}`;
+  // Generate unique cache-busting parameters
+  const timestamp = Date.now();
+  const nonce = Math.random().toString(36).substring(7);
+  const version = Date.now().toString(36);
+  
+  // Build comprehensive query string with all cache-busting parameters
+  const params = new URLSearchParams();
+  if (documentTypes?.length) {
+    params.append('document_types', documentTypes.join(','));
+  }
+  params.append('t', timestamp.toString());
+  params.append('nonce', nonce);
+  params.append('v', version);
+  params.append('_', Math.random().toString());
 
-  return request<Record<string, string | null>>(
-    `/documents/application/${applicationId}/refresh-urls${queryString}`,
-    {
-      method: 'GET',
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-        'Expires': '0'
+  // Add comprehensive cache-busting headers
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0, private',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'If-None-Match': `W/"${nonce}"`,
+    'If-Modified-Since': new Date(0).toUTCString(),
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+
+  try {
+    return await request<Record<string, string | null>>(
+      `/documents/application/${applicationId}/refresh-urls?${params.toString()}`,
+      {
+        method: 'GET',
+        headers
       }
-    }
-  );
+    );
+  } catch (error) {
+    console.error('Failed to refresh document URLs:', error);
+    throw error;
+  }
 }
 
 // Health check endpoints
