@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { User, LogOut, ClipboardList, FileText } from 'lucide-react';
-import { Button } from './ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { useAuth } from '../context/AuthContext';
+import { Button } from '../ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { useAuth } from '../../context/AuthContext';
 
 interface HeaderProps {
   currentView: 'loan-process' | 'applicants-list' | 'applicant-overview';

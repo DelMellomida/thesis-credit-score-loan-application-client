@@ -1,4 +1,4 @@
-import { Position } from './positionValidation';
+import { Position } from '../forms/positionValidation';
 
 export interface PersonalFormData {
   fullName: string;

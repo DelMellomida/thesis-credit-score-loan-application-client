@@ -1,6 +1,6 @@
 import React from 'react';
-import { Label } from '@/components/ui/label';
-import { validPositions, Position } from '@/lib/positionValidation';
+import { Label } from '../../components/ui/label';
+import { validPositions, Position } from '../../lib/forms/positionValidation';
 
 interface PositionFieldProps {
   value: Position;

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../ui/textarea';
 import { OtherData } from '../../app/page';
 import { Upload, Check, X } from 'lucide-react';
-import { COMMUNITY_ROLE, PALUWAGAN_PARTICIPATION, OTHER_INCOME_SOURCE, DISASTER_PREPAREDNESS } from '../../lib/constants';
+import { COMMUNITY_ROLE, PALUWAGAN_PARTICIPATION, OTHER_INCOME_SOURCE, DISASTER_PREPAREDNESS } from "../../lib/utils/constants";
 
 type FileType = 'profilePhoto' | 'validId' | 'brgyCert' | 'payslip' | 'companyId' | 'proofOfBilling' | 'eSignaturePersonal' | 'eSignatureCoMaker';
 

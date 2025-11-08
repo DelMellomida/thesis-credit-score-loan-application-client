@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { CoMakerData } from '../../app/page';
 import { Upload, Check, X } from 'lucide-react';
-import { COMAKER_RELATIONSHIP } from '../../lib/constants';
+import { COMAKER_RELATIONSHIP } from "../../lib/utils/constants";
 
 type FileType = 'profilePhoto' | 'validId' | 'brgyCert' | 'payslip' | 'companyId' | 'proofOfBilling' | 'eSignaturePersonal' | 'eSignatureCoMaker';
 

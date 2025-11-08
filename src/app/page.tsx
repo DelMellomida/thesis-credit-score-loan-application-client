@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState } from 'react';
-import { LoginForm } from '../components/LoginForm';
-import { Header } from '../components/Header';
-import { ProcessForm } from '../components/ProcessForm';
-import { ResultPreview } from '../components/ResultPreview';
-import { ApplicantsList, Applicant } from '../components/ApplicantList';
-import { ApplicantOverview } from '../components/ApplicantOverview';
+import { LoginForm } from '../components/auth/LoginForm';
+import { Header } from '../components/layout/Header';
+import { ProcessForm } from '../components/loan/ProcessForm';
+import { ResultPreview } from '../components/loan/ResultPreview';
+import { ApplicantsList, Applicant } from '../components/loan/ApplicantList';
+import { ApplicantOverview } from '../components/loan/ApplicantOverview';
 import { getLoanApplication, updateLoanApplication } from '../lib/api';
-import { transformToApplicant } from '../lib/transformData';
+import { transformToApplicant } from '../lib/utils/transformData';
 import type { ApplicationResponse } from '../lib/types';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -57,54 +57,7 @@ export interface FormData {
 
 type ViewType = 'loan-process' | 'applicants-list' | 'applicant-overview';
 
-// Mock applicants data (can be replaced with API calls later)
-// const mockApplicants: Applicant[] = [
-//   {
-//     id: '1',
-//     name: 'Juan dela Cruz',
-//     brgyCity: 'Manila',
-//     email: 'juan.delacruz@example.com',
-//     loanProduct: 'Regular Loan',
-//     loanAmount: '₱50,000',
-//     status: 'pending',
-//     formData: {
-//       personal: {
-//         fullName: 'Juan dela Cruz',
-//         contactNo: '09123456789',
-//         address: '123 Main St, Manila',
-//         headOfHousehold: 'Self',
-//         dependents: '3',
-//         yearsLivingHere: '5 years',
-//         housingStatus: 'Owned',
-//       },
-//       employee: {
-//         companyName: 'ABC Corporation',
-//         sector: 'Manufacturing',
-//         position: 'Supervisor',
-//         employmentDuration: '5 years',
-//         salary: '₱25,000',
-//         typeOfSalary: 'Monthly',
-//       },
-//       other: {
-//         communityPosition: 'Barangay Council',
-//         paluwagaParticipation: 'Yes',
-//         otherIncomeSources: 'Small business',
-//         disasterPreparednessStrategy: 'Emergency fund',
-//       },
-//       coMaker: {
-//         fullName: 'Maria Santos',
-//         contactNo: '09198765432',
-//         address: '456 Oak Ave, Manila',
-//         howManyMonthsYears: '3 years',
-//         salary: '₱20,000',
-//         relationshipWithApplicant: 'Sister',
-//       },
-//     },
-//   },
-//   // Add more mock data as needed
-// ];
-
-import { loadFormData, saveFormData, clearFormData } from '../lib/formStorage';
+import { loadFormData, saveFormData, clearFormData } from '../lib/forms/storage';
 
 const INITIAL_FORM_DATA: FormData = {
   personal: {
@@ -144,6 +97,14 @@ export default function App() {
   const { user, loading, error } = useAuth();
   const [currentView, setCurrentView] = useState<ViewType>('applicants-list');
 
+  // Reset to applicants list whenever auth state changes
+  React.useEffect(() => {
+    if (user) {
+      setCurrentView('applicants-list');
+      newApplicant();
+    }
+  }, [user]);
+
   // Initialize form data from storage or use initial data
   const [formData, setFormData] = useState<FormData>(() => {
     const loaded = loadFormData();
@@ -163,10 +124,13 @@ export default function App() {
   const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null);
 
   const handleToggleView = () => {
-    if (currentView === 'loan-process') {
-      setCurrentView('applicants-list');
-    } else {
+    if (currentView === 'applicants-list') {
+      // When switching to loan process, ensure we start with a clean form
+      newApplicant(); // This clears the form data
       setCurrentView('loan-process');
+    } else {
+      // When going back to list, clear any selected applicant
+      setCurrentView('applicants-list');
       setSelectedApplicant(null);
     }
   };
@@ -183,20 +147,15 @@ export default function App() {
     });
   };
 
-  // As a fallback, ensure any change to formData is persisted.
-  // This covers cases where child components might update values locally
-  // and the parent state is updated in a way that doesn't call updateFormData.
   React.useEffect(() => {
     try {
       saveFormData(formData);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[App] Error saving formData in effect', err);
     }
   }, [formData]);
 
   const newApplicant = () => {
-    // Clear storage and reset form to initial state
     clearFormData();
     setFormData(INITIAL_FORM_DATA);
     setLoanResult(null);
@@ -218,21 +177,17 @@ export default function App() {
 
   const handleViewEdit = async (applicant: Applicant) => {
     try {
-      // Get the application using MongoDB ObjectId
       const fullApplication = await getLoanApplication(applicant.id, user?.token);
       // console.log('Full Application Data:', fullApplication);
       
-      // Type guard function to check if response is valid
       const isValidApplication = (data: any): data is ApplicationResponse => {
         return data && typeof data === 'object' && '_id' in data;
       };
 
-      // Ensure we have the complete application response
       if (!isValidApplication(fullApplication)) {
         throw new Error('Invalid application data received');
       }
 
-      // Transform the full application data
       const enrichedApplicant = {
         ...applicant,
         formData: transformToApplicant(fullApplication).formData
@@ -258,9 +213,6 @@ export default function App() {
     }
 
     try {
-      // Update local state only - the API call is already handled in ApplicantOverview
-
-      // Just update local state since the API call and toast are handled in ApplicantOverview
       setApplicants(prev =>
         prev.map(app =>
           app.id === selectedApplicant.id
@@ -292,7 +244,6 @@ export default function App() {
       <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-80px)] overflow-hidden">
         {currentView === 'loan-process' && (
           <div className="flex gap-6 h-full overflow-hidden">
-            {/* Process Form Section */}
             <div className="flex-1">
               <ProcessForm
                 formData={formData}
@@ -303,7 +254,6 @@ export default function App() {
               />
             </div>
 
-            {/* Result Preview Section */}
             <div className="w-96 overflow-hidden">
               <ResultPreview formData={formData} loanResult={loanResult} />
             </div>

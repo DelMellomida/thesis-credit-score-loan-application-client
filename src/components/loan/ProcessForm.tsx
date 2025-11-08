@@ -1,18 +1,18 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { saveFiles, loadFiles, clearFiles } from "../lib/formStorage";
-import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { saveFiles, loadFiles, clearFiles } from "../../lib/forms/storage";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { StepProgress } from "./StepProgress";
-import { PersonalDataForm } from "./forms/PersonalDataForm";
-import { EmployeeDataForm } from "./forms/EmployeeDataForm";
-import { OtherDataForm } from "./forms/OtherDataForm";
-import { CoMakerDataForm } from "./forms/CoMakerDataForm";
-import type { FormData } from "../app/page";
-import { transformLoanFormData } from "../lib/loanTransform";
-import { createLoanApplication, uploadDocuments } from "../lib/api";
-import { validateFullApplication } from "../lib/validation";
+import { PersonalDataForm } from "../forms/PersonalDataForm";
+import { EmployeeDataForm } from "../forms/EmployeeDataForm";
+import { OtherDataForm } from "../forms/OtherDataForm";
+import { CoMakerDataForm } from "../forms/CoMakerDataForm";
+import type { FormData } from "../../app/page";
+import { transformLoanFormData } from "../../lib/utils/loanTransform";
+import { createLoanApplication, uploadDocuments } from "../../lib/api";
+import { validateFullApplication } from "../../lib/forms/validation";
 import { toast } from 'sonner';
 
 export function ProcessForm({

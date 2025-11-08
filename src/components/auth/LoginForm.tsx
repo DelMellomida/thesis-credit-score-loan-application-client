@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "../context/AuthContext";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { useAuth } from "../../context/AuthContext";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 
 export function LoginForm() {
   const { login, loading, error } = useAuth();

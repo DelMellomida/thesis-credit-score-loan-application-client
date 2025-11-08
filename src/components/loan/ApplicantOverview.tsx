@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, ArrowLeft, X, FileText, Trash2, ChevronLeft, ChevronRight, Save } from 'lucide-react';
-import { PositionField } from '@/components/forms/PositionField';
-import { validatePosition } from '@/lib/positionValidation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { PositionField } from '../forms/PositionField';
+import { validatePosition } from '../../lib/forms/positionValidation';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -19,11 +19,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Applicant } from '@/components/ApplicantList';
-import { FormData as CustomFormData } from '@/lib/formTypes';
-import { transformToApplicant } from '@/lib/transformData';
-import { useAuth } from '@/context/AuthContext';
+} from '../ui/alert-dialog';
+import { Applicant } from '../loan/ApplicantList';
+import { FormData as CustomFormData } from '../../lib/types/forms';
+import { transformToApplicant } from '../../lib/utils/transformData';
+import { useAuth } from '../../context/AuthContext';
 import { 
   deleteLoanApplication, 
   uploadDocuments, 
@@ -33,7 +33,7 @@ import {
   refreshApplicationDocumentUrls,
   deleteDocument,
   deleteSingleFile 
-} from '@/lib/api';
+} from '../../lib/api';
 
 interface ApplicantOverviewProps {
   applicant: Applicant & { 
@@ -136,13 +136,11 @@ export function ApplicantOverview({
              'High Risk'
     };
   };
-  // Log only non-sensitive data
   console.log('Processing application update');
   const { user } = useAuth();
   const [applicationData, setApplicationData] = useState<ApplicationData | null>(null);
   const [editableData, setEditableData] = useState<CustomFormData>(applicant.formData);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  // Accept both camelCase and snake_case initial values from passed applicant.documents
   const [profilePhoto, setProfilePhoto] = useState<string | null>(
     applicant.documents?.profilePhoto || (applicant.documents?.profile_photo_url as string) || (applicant.documents?.profile_photo as string) || null
   );
@@ -150,7 +148,6 @@ export function ApplicantOverview({
     applicant.documents?.idPhoto || (applicant.documents?.valid_id_url as string) || (applicant.documents?.valid_id as string) || null
   );
   
-  // Document uploads and previews
   const [documents, setDocuments] = useState({
     brgyCert: null as File | null,
     eSignaturePersonal: null as File | null,
@@ -168,12 +165,10 @@ export function ApplicantOverview({
     eSignatureCoMaker: null as string | null,
   });
 
-  // application UUID (from applicationData.application_id) used to refresh signed URLs
   const [applicationUUID, setApplicationUUID] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<'recommendation' | 'prediction' | 'explanation'>('recommendation');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Track image retry attempts to avoid infinite refresh loops for all document types
   const [imageRetries, setImageRetries] = useState<Record<string, number>>({
     profilePhoto: 0,
     idPhoto: 0,
@@ -184,10 +179,8 @@ export function ApplicantOverview({
     proofOfBilling: 0,
     eSignatureCoMaker: 0,
   });
-  const MAX_IMAGE_RETRIES = 1; // attempt one automatic refresh per image
+  const MAX_IMAGE_RETRIES = 1;
 
-  // Fetch application data and document URLs when component mounts
-  // Periodically check URLs and refresh if needed (every 4 minutes)
   useEffect(() => {
     const checkUrls = async () => {
       const anyExpiringSoon = [
@@ -197,7 +190,6 @@ export function ApplicantOverview({
       ].some(url => url && isUrlExpiringSoon(url));
 
       if (anyExpiringSoon) {
-        // Document URLs need to be refreshed
         await refreshSignedUrls();
       }
     };
@@ -213,11 +205,9 @@ export function ApplicantOverview({
           throw new Error('No authentication token available');
         }
 
-        // First get the complete loan application using MongoDB _id
         const response = await getLoanApplication(applicant.id, user.token);
-        setApplicationData(response);  // Store the application data in state
+        setApplicationData(response);
 
-        // Extract the application_id (UUID) from the application details
         const applicationId = response?.application_id 
           ? typeof response.application_id === 'string'
             ? response.application_id
@@ -227,17 +217,12 @@ export function ApplicantOverview({
         if (!applicationId) {
           console.warn('Missing required application data.');
         } else {
-          // store the application UUID for later refresh attempts
           setApplicationUUID(applicationId);
-          // Then get the document URLs using the application_id (UUID)
           const documentResponse = await getApplicationDocuments(applicationId, user.token) as Record<string, string | null>;
           if (documentResponse) {
-            // Set document previews
             const previews = { ...documentPreviews };
             Object.entries(documentResponse).forEach(([key, value]) => {
               if (value && typeof value === 'string') {
-                // Preview is being set
-                // Map snake_case keys (and variants) to camelCase
                 const profileKeys = ['profile_photo_url', 'profile_photo', 'profilePhoto'];
                 const idKeys = ['valid_id_url', 'valid_id', 'idPhoto'];
 
@@ -246,7 +231,6 @@ export function ApplicantOverview({
                 } else if (idKeys.includes(key)) {
                   setIdPhoto(value);
                 } else {
-                  // Map other document keys and any variants
                   const mappings: Record<string, keyof typeof documentPreviews> = {
                     'brgy_cert_url': 'brgyCert',
                     'brgy_cert': 'brgyCert',
@@ -268,25 +252,19 @@ export function ApplicantOverview({
                 }
               }
             });
-            // Document previews have been updated
             setDocumentPreviews(previews);
           }
         }
 
-        // Update the form data with the latest application data
         if (response) {
-          // Cast to any since we know the structure is compatible but types don't fully match
           const transformedData = transformToApplicant(response as any);
-          
-          // Convert employment durations from months to years/months format
+
           if (response.model_input_data) {
-            // Applicant employment duration
             if (response.model_input_data.Employment_Tenure_Months) {
               transformedData.formData.employee.employmentDuration = 
                 convertMonthsToYearsMonths(response.model_input_data.Employment_Tenure_Months);
             }
-            
-            // Co-maker employment duration
+
             if (response.model_input_data.Comaker_Employment_Tenure_Months) {
               transformedData.formData.coMaker.howManyMonthsYears = 
                 convertMonthsToYearsMonths(response.model_input_data.Comaker_Employment_Tenure_Months);
@@ -304,7 +282,6 @@ export function ApplicantOverview({
     fetchApplicationData();
   }, [applicant.id, user?.token]);
 
-  // Utility function to check if URL is about to expire
   const isUrlExpiringSoon = (url: string) => {
     try {
       const urlObj = new URL(url);
@@ -316,7 +293,6 @@ export function ApplicantOverview({
       const expirySeconds = parseInt(expiryParam, 10);
       const dateStr = dateParam;
       
-      // AWS signature format: YYYYMMDDTHHMMSSZ
       const signatureDate = new Date(
         Date.UTC(
           parseInt(dateStr.slice(0, 4), 10),
@@ -331,7 +307,6 @@ export function ApplicantOverview({
       const expiryTime = signatureDate.getTime() + (expirySeconds * 1000);
       const timeToExpiry = expiryTime - Date.now();
       
-      // Return true if URL will expire in less than 5 minutes
       return timeToExpiry < 5 * 60 * 1000;
     } catch (error) {
       console.error('Error parsing URL expiration:', error);
@@ -339,16 +314,13 @@ export function ApplicantOverview({
     }
   };
 
-  // Helper to refresh signed URLs by calling the dedicated refresh endpoint
   const refreshSignedUrls = async (field?: 'profilePhoto' | 'idPhoto') => {
     if (!applicationUUID || !user?.token) return null;
     try {
-      // Always force refresh for the requested field or all fields
       const documentTypes = field 
         ? [field === 'profilePhoto' ? 'profile_photo' : 'valid_id']
         : undefined;
       
-      // Add timestamp to prevent browser caching
       const timestamp = Date.now();
       const refreshed = await refreshApplicationDocumentUrls(
         `${applicationUUID}?t=${timestamp}&noCache=${Math.random()}`,
@@ -358,7 +330,6 @@ export function ApplicantOverview({
       
       if (!refreshed) return null;
 
-      // Update profile/id specifically if present
       if (field === 'profilePhoto') {
         const profile = refreshed.profile_photo_url || refreshed.profile_photo || refreshed.profilePhoto;
         if (profile) {
@@ -372,7 +343,6 @@ export function ApplicantOverview({
           setIdPhoto(urlWithCache);
         }
       } else {
-        // General update of all previews with cache busting
         const previews = { ...documentPreviews };
         const mappings: Record<string, keyof typeof documentPreviews> = {
           'brgy_cert_url': 'brgyCert', 'brgy_cert': 'brgyCert',
@@ -386,7 +356,6 @@ export function ApplicantOverview({
         Object.entries(refreshed).forEach(([k, v]) => {
           if (!v) return;
           
-          // Add cache busting parameters to each URL
           const urlWithCache = `${v}${v.includes('?') ? '&' : '?'}t=${timestamp}&noCache=${Math.random()}`;
           
           if (['profile_photo_url','profile_photo','profilePhoto'].includes(k)) {
@@ -399,7 +368,6 @@ export function ApplicantOverview({
         });
         setDocumentPreviews(previews);
 
-        // URLs are automatically stored in Supabase, no need to update the database
       }
       return refreshed;
     } catch (e) {
@@ -422,17 +390,13 @@ export function ApplicantOverview({
     if (!user?.token || !applicationUUID) return;
     
     try {
-      // Upload the documents using application UUID
       await uploadDocuments(applicationUUID, files, user.token);
       
-      // Add a delay to ensure the upload is complete
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Get fresh application data first
       const applicationData = await getLoanApplication(applicant.id, user.token);
       if (!applicationData) throw new Error("Failed to refresh application data");
 
-      // Force a fresh URL refresh
       const refreshedUrls = await refreshApplicationDocumentUrls(
         applicationUUID, 
         undefined,
@@ -441,12 +405,10 @@ export function ApplicantOverview({
       console.log('Refreshed document URLs:', refreshedUrls);
 
       if (refreshedUrls) {
-        // Update all document previews
         const previews = { ...documentPreviews };
         Object.entries(refreshedUrls).forEach(([key, value]) => {
           if (!value || typeof value !== 'string') return;
           
-          // Map snake_case keys to our state variables
           if (['profile_photo_url', 'profile_photo', 'profilePhoto'].includes(key)) {
             console.log('Updating profile photo URL:', value);
             setProfilePhoto(value);
@@ -482,7 +444,6 @@ export function ApplicantOverview({
       }
     } catch (error) {
       console.error('Error updating documents:', error);
-      // Error will be shown by handleFileUpload's error handler
       return null;
     }
   };
@@ -491,8 +452,7 @@ export function ApplicantOverview({
     const file = e.target.files?.[0];
     if (!file || !applicationUUID || !user?.token) return;
 
-    // Validate file size (5MB limit)
-    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
       toast.error("File too large", {
         description: "Please upload a file smaller than 5MB",
@@ -501,7 +461,6 @@ export function ApplicantOverview({
       return;
     }
 
-    // Validate file type and create metadata
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
       toast.error("Invalid file type", {
@@ -535,7 +494,6 @@ export function ApplicantOverview({
     const docType = docFieldMap[type];
     const formData = new FormData();
     
-    // Create document metadata
     const metadata = {
       documentType: docType,
       fileName: file.name,
@@ -545,18 +503,14 @@ export function ApplicantOverview({
       uploadTimestamp: new Date().toISOString()
     };
     
-    // Append both file and metadata
     formData.append(fieldName, file);
     formData.append(`${fieldName}_metadata`, JSON.stringify(metadata));
     
-    // Create temporary preview
     const tempObjectUrl = URL.createObjectURL(file);
-    // Show initial loading toast and store its ID
     const toastId = toast.loading("Processing document...", {
       description: "Uploading file..."
     });
     
-    // Keep track of the current URLs before updating
     const currentUrls = {
       profilePhoto: profilePhoto,
       idPhoto: idPhoto,
@@ -564,7 +518,6 @@ export function ApplicantOverview({
     };
     
     try {
-      // Update UI with temporary preview immediately
       if (type === 'profile') {
         setProfilePhoto(tempObjectUrl);
       } else if (type === 'id') {
@@ -574,7 +527,6 @@ export function ApplicantOverview({
         setDocumentPreviews(prev => ({ ...prev, [type]: tempObjectUrl }));
       }
 
-      // Upload the file with retry logic
       let retryCount = 0;
       const maxRetries = 3;
       
@@ -582,19 +534,16 @@ export function ApplicantOverview({
         try {
           const response = await uploadDocuments(applicationUUID, formData, user.token);
           if (!response) throw new Error('Upload failed - no response');
-          break; // Success - exit retry loop
+          break; 
         } catch (uploadError) {
           retryCount++;
           if (retryCount === maxRetries) throw uploadError;
-          // Exponential backoff
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
         }
       }
       
-      // Wait for processing
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Update the existing toast
       toast.loading("Processing document...", {
         id: toastId,
         description: "Refreshing image preview..."
@@ -603,7 +552,6 @@ export function ApplicantOverview({
       const timestamp = Date.now();
       const randomStr = Math.random().toString(36).substring(7);
       
-      // Fetch the updated document URLs
       const refreshResult = await refreshApplicationDocumentUrls(
         `${applicationUUID}?t=${timestamp}&r=${randomStr}`,
         [docType],
@@ -616,10 +564,8 @@ export function ApplicantOverview({
         throw new Error('Failed to get updated document URL');
       }
 
-      // Clean up temp preview
       URL.revokeObjectURL(tempObjectUrl);
 
-      // Try different possible URL key formats
       const possibleKeys = [
         `${docType}_url`,           // e.g., profile_photo_url
         docType,                     // e.g., profile_photo
@@ -641,7 +587,6 @@ export function ApplicantOverview({
         throw new Error('No URL returned for uploaded document');
       }
 
-      // Add cache busting to the URL
       const urlWithCache = `${newUrl}${
         newUrl.includes('?') ? '&' : '?'
       }t=${timestamp}&r=${randomStr}&nocache=${Date.now()}`;
@@ -660,14 +605,12 @@ export function ApplicantOverview({
         }));
       }
 
-      // Update the toast to show success
       toast.success("Document uploaded successfully", {
         id: toastId,
         description: "File has been processed and saved",
         duration: 4000
       });
 
-      // Force a re-render by triggering a state update
       setTimeout(() => {
         if (type === 'profile') {
           setProfilePhoto(url => url ? `${url.split('&nocache=')[0]}&nocache=${Date.now()}` : url);
@@ -679,7 +622,6 @@ export function ApplicantOverview({
     } catch (error) {
       console.error('Upload failed:', error);
       
-      // Revert to previous URLs
       if (type === 'profile') {
         setProfilePhoto(currentUrls.profilePhoto);
       } else if (type === 'id') {
@@ -689,10 +631,8 @@ export function ApplicantOverview({
         setDocumentPreviews(prev => ({ ...prev, [type]: currentUrls[type] }));
       }
 
-      // Clean up temporary object URL
       URL.revokeObjectURL(tempObjectUrl);
 
-      // Show error message
       toast.error("Failed to upload document", {
         id: toastId,
         description: error instanceof Error ? error.message : "An error occurred during upload",
@@ -701,17 +641,15 @@ export function ApplicantOverview({
   };
 
   const handleSave = async () => {
-    if (isSaving) return; // Prevent multiple clicks while saving
+    if (isSaving) return;
     
     try {
       if (!user?.token || !applicationData) return;
       
       setIsSaving(true);
       
-      // Prepare FormData with updated information
       const formData = new FormData();
       
-      // Add updated form data
       const reqData = {
         applicant_info: {
           full_name: editableData.personal.fullName || "",
@@ -776,7 +714,6 @@ export function ApplicantOverview({
         }
       };
 
-      // Get MongoDB ID
       const mongoId = typeof applicationData._id === 'string' 
         ? applicationData._id 
         : applicationData._id?.$oid;
@@ -787,11 +724,8 @@ export function ApplicantOverview({
 
       console.log('Preparing FormData for update...');
       
-      // Add the request data to FormData
       formData.append('request_data', JSON.stringify(reqData));
       
-      // Only append files if they are actually being updated
-      // This is tracked in the documents state for regular documents
       Object.entries(documents).forEach(([key, file]) => {
         if (file) {
           formData.append(key, file);
@@ -805,7 +739,6 @@ export function ApplicantOverview({
 
       console.log('Making update request...');
       
-      // Call the update API
       const response = await updateLoanApplication(
         mongoId,
         formData,
@@ -814,18 +747,15 @@ export function ApplicantOverview({
 
       console.log('Update response:', response);
 
-      // Show success message
       toast.success("Application Updated", {
         description: "The application has been updated and reassessed successfully."
       });
 
-      // Notify parent component
       onSave({
         formData: editableData,
       });
     } catch (error) {
       console.error('Error updating application:', error);
-      // Show error message
       toast.error("Update Failed", {
         description: error instanceof Error ? error.message : "Failed to update the application"
       });
@@ -834,7 +764,6 @@ export function ApplicantOverview({
     }
   };
 
-  // Get loan recommendations and prediction data from application data
   const predictionResult = applicationData?.prediction_result;
   const recommendations = predictionResult?.loan_recommendation || [];
   const topRecommendation = recommendations.find(rec => rec.is_top_recommendation) || recommendations[0];
@@ -858,7 +787,6 @@ export function ApplicantOverview({
 
   return (
     <div className="h-full flex flex-col gap-4 overflow-hidden">
-      {/* Image Preview Modal */}
       {previewImage && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
@@ -882,7 +810,6 @@ export function ApplicantOverview({
           </div>
         </div>
       )}
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
@@ -921,7 +848,6 @@ export function ApplicantOverview({
                   if (!user?.token || !applicationUUID) return;
                   try {
                     await deleteLoanApplication(applicationUUID, user.token);
-                    // Navigate back to list view
                     onBack();
                   } catch (error) {
                     console.error('Error deleting application:', error);
@@ -960,11 +886,9 @@ export function ApplicantOverview({
                           onError={async (e) => {
                             console.error('Failed to load profile photo:', profilePhoto);
                             
-                            // Clear source to prevent cached version
                             e.currentTarget.src = '';
                             
                             try {
-                              // Force immediate refresh of the URL
                               if (applicationUUID && user?.token) {
                                 const timestamp = Date.now();
                                 const refreshed = await refreshApplicationDocumentUrls(
@@ -974,15 +898,12 @@ export function ApplicantOverview({
                                 );
                                 
                                 if (refreshed && refreshed.profile_photo_url) {
-                                  // Add cache busting parameters
                                   const newUrl = refreshed.profile_photo_url + 
                                     (refreshed.profile_photo_url.includes('?') ? '&' : '?') +
                                     `t=${timestamp}&noCache=${Math.random()}`;
                                   
-                                  // Update state with new URL
                                   setProfilePhoto(newUrl);
                                   
-                                  // Update image source
                                   e.currentTarget.src = newUrl;
                                   return;
                                 }
@@ -991,7 +912,6 @@ export function ApplicantOverview({
                               console.error('Error refreshing profile photo URL:', error);
                             }
                             
-                            // Show fallback if refresh failed
                             e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>';
                           }}
                         />
@@ -1741,7 +1661,6 @@ const DocumentUploadField: React.FC<DocumentUploadFieldProps> = ({
                         const documentType = documentTypeMap[id];
                         
                         if (documentType) {
-                          // Force immediate refresh of specific document URL
                           const refreshed = await refreshApplicationDocumentUrls(
                             `${applicationUUID}?t=${timestamp}&noCache=${Math.random()}`,
                             [documentType],
@@ -1749,7 +1668,6 @@ const DocumentUploadField: React.FC<DocumentUploadFieldProps> = ({
                           );
                           
                           if (refreshed) {
-                            // Update preview URLs with cache busting
                             const newPreviews = { ...documentPreviews };
                             const mappings: Record<string, keyof typeof documentPreviews> = {
                               'brgy_cert_url': 'brgyCert',
@@ -1763,7 +1681,6 @@ const DocumentUploadField: React.FC<DocumentUploadFieldProps> = ({
                             Object.entries(refreshed).forEach(([key, value]) => {
                               if (!value) return;
                               
-                              // Add cache busting parameters
                               const urlWithCache = `${value}${value.includes('?') ? '&' : '?'}t=${timestamp}&noCache=${Math.random()}`;
                               
                               if (key === 'profile_photo_url') {
@@ -1782,7 +1699,7 @@ const DocumentUploadField: React.FC<DocumentUploadFieldProps> = ({
                             });
                             
                             setDocumentPreviews(newPreviews);
-                            return; // Exit if refresh successful
+                            return;
                           }
                         }
                       }
@@ -1790,9 +1707,7 @@ const DocumentUploadField: React.FC<DocumentUploadFieldProps> = ({
                       console.error('Failed to refresh URLs:', error);
                     }
 
-                    // Show fallback if refresh failed
                     if (e.currentTarget) {
-                      // Use appropriate fallback icon based on document type
                       let fallbackIcon;
                       if (id.includes('signature')) {
                         fallbackIcon = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />`;
@@ -1806,7 +1721,6 @@ const DocumentUploadField: React.FC<DocumentUploadFieldProps> = ({
                       
                       e.currentTarget.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${fallbackIcon}</svg>`;
                       
-                      // Add error message below the image
                       const container = e.currentTarget.parentElement;
                       if (container) {
                         const errorMsg = document.createElement('div');

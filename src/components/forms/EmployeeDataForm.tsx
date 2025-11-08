@@ -6,7 +6,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { EmployeeData } from '../../app/page';
 import { Upload, Check, X } from 'lucide-react';
-import { EMPLOYMENT_SECTOR, SALARY_FREQUENCY } from '../../lib/constants';
+import { EMPLOYMENT_SECTOR, SALARY_FREQUENCY } from "../../lib/utils/constants";
 
 type FileType = 'payslip' | 'companyId' | 'profilePhoto' | 'validId' | 'brgyCert' | 'proofOfBilling' | 'eSignaturePersonal' | 'eSignatureCoMaker';
 

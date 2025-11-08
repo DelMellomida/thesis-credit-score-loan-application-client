@@ -12,7 +12,7 @@ import {
 } from "../ui/select";
 import { PersonalData } from "../../app/page";
 import { Upload, Check, X } from "lucide-react";
-import { HOUSING_STATUS, YES_NO } from "../../lib/constants";
+import { HOUSING_STATUS, YES_NO } from "../../lib/utils/constants";
 
 type FileType = 'profilePhoto' | 'validId' | 'brgyCert' | 'payslip' | 'companyId' | 'proofOfBilling' | 'eSignaturePersonal' | 'eSignatureCoMaker';
 

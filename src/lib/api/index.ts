@@ -1,55 +1,44 @@
-// API utility functions for Next.js client
-// Uses NEXT_PUBLIC_API_URL from .env.local
-
-import type { Applicant } from '@/components/ApplicantList';
-import { transformToApplicant } from './transformData';
-import type { ApplicationResponse } from './types';
+import type { Applicant } from '@/components/loan/ApplicantList';
+import { transformToApplicant } from '../utils/transformData';
+import type { ApplicationResponse } from '../types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-// Custom type for request headers
 type RequestHeaders = Record<string, string> & {
   'Content-Type'?: string;
   'Accept'?: string;
   'Authorization'?: string;
 };
 
-// Helper for requests
+// Executes a typed API request with automatic token refresh and error handling
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  // Start with default headers
   const defaultHeaders: RequestHeaders = {};
   
-  // Only set default Content-Type if we're not sending FormData
   if (!(options.body instanceof FormData)) {
     defaultHeaders['Content-Type'] = 'application/json';
     defaultHeaders['Accept'] = 'application/json';
   }
 
-  // Combine with provided headers and ensure Authorization is properly formatted
   const headers: RequestHeaders = {
     ...defaultHeaders,
     ...((options.headers as RequestHeaders) || {})
   };
 
-  // Format Authorization header if present (do not log sensitive token values)
   if (headers.Authorization) {
     const token = headers.Authorization;
     if (!token) {
       delete headers.Authorization;
     } else {
-      // Add Bearer prefix if not already present
       const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       headers.Authorization = formattedToken;
     }
   }
 
-  // Try to execute the request with automatic token refresh on 401
   const executeRequest = async (shouldRefresh = true): Promise<T> => {
     const requestUrl = `${API_URL}${endpoint}`;
     const hasAuth = 'Authorization' in headers;
 
     try {
-      // Add comprehensive cache-busting for document URLs
       const isDocumentRequest = endpoint.startsWith('/documents/');
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(7);
@@ -57,15 +46,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
         ? `${requestUrl}${requestUrl.includes('?') ? '&' : '?'}t=${timestamp}&noCache=${random}&v=${timestamp}`
         : requestUrl;
 
-      // Add cache control headers for document requests
       if (isDocumentRequest) {
-        // Set strict cache control headers
         headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0';
         headers['Pragma'] = 'no-cache';
         headers['Expires'] = '0';
         headers['Surrogate-Control'] = 'no-store';
-        headers['If-None-Match'] = `"${timestamp}-${random}"`; // Unique ETag
-        headers['If-Modified-Since'] = new Date(0).toUTCString(); // Force revalidation
+        headers['If-None-Match'] = `"${timestamp}-${random}"`;
+        headers['If-Modified-Since'] = new Date(0).toUTCString();
       }
       
       const response = await fetch(url, {
@@ -74,12 +61,8 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
         credentials: 'include',
       });
 
-      // Response received - avoid logging potentially sensitive headers or tokens
-
       if (!response.ok) {
-        // Handle 401 Unauthorized with token refresh
         if (response.status === 401 && shouldRefresh && headers.Authorization) {
-          // Get stored user data
           const storedUser = localStorage.getItem('authUser');
           if (!storedUser) {
             throw new Error('Authentication required');
@@ -88,7 +71,6 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
           const user = JSON.parse(storedUser);
 
           try {
-            // Attempt to refresh the token
             const refreshResponse = await fetch(`${API_URL}/auth/refresh`, {
               method: 'POST',
               headers: {
@@ -98,23 +80,18 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
             });
 
             if (!refreshResponse.ok) {
-              // If refresh fails, clear authentication and throw error
               localStorage.removeItem('authUser');
               window.dispatchEvent(new Event('auth-error'));
               throw new Error('Session expired. Please log in again.');
             }
 
-            // Get new token
             const { access_token } = await refreshResponse.json();
 
-            // Update stored user data
             user.token = access_token;
             localStorage.setItem('authUser', JSON.stringify(user));
 
-            // Update Authorization header with new token
             headers.Authorization = `Bearer ${access_token}`;
 
-            // Retry the original request with the new token
             return executeRequest(false);
           } catch (error) {
             console.error('Token refresh failed:', error);
@@ -122,7 +99,6 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
           }
         }
 
-        // Handle non-401 errors
         const contentType = response.headers.get('content-type');
         let errorData;
         
@@ -150,18 +126,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return executeRequest();
 }
 
-// Transform backend response to frontend Applicant type is now imported from './transformData'
-
-// Auth endpoints
+// Authenticates user with OAuth2 password flow and returns access token
 export async function login(username: string, password: string) {
-  // FastAPI expects x-www-form-urlencoded for OAuth2
   const body = new URLSearchParams({
     username: username,
     password: password,
-    grant_type: 'password'  // Required for OAuth2 password flow
+    grant_type: 'password'
   });
-
-  // Attempting login
 
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
@@ -191,11 +162,10 @@ export async function login(username: string, password: string) {
   }
 
   const data = await res.json();
-  // Do not log tokens or sensitive login response data
-
   return data;
 }
 
+// Creates a new user account with the provided credentials
 export async function signup(email: string, full_name: string, password: string) {
   return request('/auth/signup', {
     method: 'POST',
@@ -203,16 +173,14 @@ export async function signup(email: string, full_name: string, password: string)
   });
 }
 
-// Loan application endpoints
+// Creates a new loan application with the provided form data
 export async function createLoanApplication(data: FormData, token?: string) {
   if (!token) {
     console.error('No token provided to createLoanApplication');
     throw new Error('Authentication required');
   }
 
-  // Remove any existing 'Bearer ' prefix
   const cleanToken = token.replace(/^Bearer\s+/i, '');
-  // Do not log tokens or FormData contents (may contain PII)
   
   return request('/loans/applications', {
     method: 'POST',
@@ -223,6 +191,7 @@ export async function createLoanApplication(data: FormData, token?: string) {
   });
 }
 
+// Retrieves all loan applications for the current authenticated user
 export async function getMyApplications(token?: string) {
   const response = await request<ApplicationResponse[]>('/loans/my-applications', {
     method: 'GET',
@@ -247,6 +216,7 @@ interface PaginatedResponse<T> {
   counts: StatusCounts;
 }
 
+// Retrieves paginated loan applications with optional status and search filters
 export async function getAllApplications(
   token?: string, 
   page: number = 1, 
@@ -261,13 +231,11 @@ export async function getAllApplications(
 
   const skip = (page - 1) * pageSize;
   
-  // Build query string with filters
   const params = new URLSearchParams({
     skip: skip.toString(),
     limit: pageSize.toString()
   });
 
-  // Add optional filters
   if (status && status !== 'all') {
     params.append('status', status);
   }
@@ -275,7 +243,6 @@ export async function getAllApplications(
     params.append('search', search);
   }
 
-  // Use token directly without modification - let the request helper handle Bearer prefix
   const headers = {
     'Authorization': token,
     'Accept': 'application/json'
@@ -293,8 +260,6 @@ export async function getAllApplications(
       headers
     });
 
-    // Successfully fetched applications
-
     return {
       data: response.data.map(transformToApplicant),
       total: response.total,
@@ -308,6 +273,7 @@ export async function getAllApplications(
   }
 }
 
+// Updates the status of a loan application
 export async function updateApplicationStatus(
   applicationId: string, 
   status: 'approved' | 'denied' | 'cancelled' | 'pending', 
@@ -327,8 +293,6 @@ export async function updateApplicationStatus(
     throw new Error(`Invalid status. Valid statuses are: ${Object.keys(validStatuses).join(', ')}`);
   }
 
-  // Sending status update (no sensitive logging)
-
   try {
     const response = await request(`/loans/applications/${applicationId}/status`, {
       method: 'PUT',
@@ -347,47 +311,36 @@ export async function updateApplicationStatus(
   }
 }
 
+// Retrieves detailed information for a specific loan application including documents
 export async function getLoanApplication(applicationId: string, token?: string) {
   if (!token) {
     console.error('No token provided to getLoanApplication');
     throw new Error('Authentication required');
   }
 
-  // Fetching full application details
-
-  // Use token directly - let request helper handle Bearer prefix
   const headers = {
     'Authorization': token,
     'Accept': 'application/json'
   };
 
   try {
-    // First get the application data using the MongoDB ID endpoint
     const applicationData = await request<ApplicationResponse>(`/loans/applications/id/${applicationId}`, {
       method: 'GET',
       headers
     });
 
-  // Received application details
-
     try {
-      // Then get the document URLs
-      // Attempt to fetch document data, provide empty object if it fails or returns 404
       try {
         const documentData = await request<Record<string, string | null>>(`/documents/application/${applicationId}`, {
           method: 'GET',
           headers
         });
-  // Document URLs fetched
 
-        // Combine the data
         return {
           ...applicationData,
           documents: documentData
         };
       } catch (docError) {
-  // No documents found
-        // Return empty document URLs if request fails
         return {
           ...applicationData,
           documents: {
@@ -412,9 +365,8 @@ export async function getLoanApplication(applicationId: string, token?: string) 
   }
 }
 
-// Demo loan application (for presentations/testing)
+// Creates a demo loan application for testing purposes
 export async function createDemoLoanApplication(params: Record<string, any>, token?: string) {
-  // params should match backend demo endpoint fields
   const searchParams = new URLSearchParams(params).toString();
   return request(`/loans/applications/demo?${searchParams}`, {
     method: 'POST',
@@ -422,7 +374,7 @@ export async function createDemoLoanApplication(params: Record<string, any>, tok
   });
 }
 
-// Update loan application
+// Updates an existing loan application with new form data
 export async function updateLoanApplication(
   applicationId: string, 
   data: FormData,
@@ -433,11 +385,8 @@ export async function updateLoanApplication(
     throw new Error('Authentication required');
   }
 
-  // Remove any existing 'Bearer ' prefix
   const cleanToken = token.replace(/^Bearer\s+/i, '');
-  // Updating loan application (no sensitive logging)
 
-  // Ensure request_data exists in FormData
   let hasRequestData = false;
   for (const [key] of data.entries()) {
     if (key === 'request_data') {
@@ -450,9 +399,6 @@ export async function updateLoanApplication(
     console.error('request_data is missing from FormData');
     throw new Error('request_data is required for updating loan application');
   }
-
-  // Log the FormData contents for debugging
-  // Do not log FormData contents (may contain PII)
   
   return request(`/loans/applications/${applicationId}`, {
     method: 'PUT',
@@ -463,7 +409,7 @@ export async function updateLoanApplication(
   });
 }
 
-// Regenerate loan recommendations
+// Regenerates loan recommendations for a specific application
 export async function regenerateLoanRecommendations(applicationId: string, token?: string) {
   return request(`/loans/applications/${applicationId}/regenerate-recommendations`, {
     method: 'POST',
@@ -471,7 +417,7 @@ export async function regenerateLoanRecommendations(applicationId: string, token
   });
 }
 
-// Delete loan application
+// Deletes a loan application by its ID
 export async function deleteLoanApplication(applicationId: string, token?: string) {
   return request(`/loans/applications/${applicationId}`, {
     method: 'DELETE',
@@ -479,18 +425,15 @@ export async function deleteLoanApplication(applicationId: string, token?: strin
   });
 }
 
-// Document management endpoints
+// Uploads documents for a loan application
 export async function uploadDocuments(applicationId: string, files: FormData, token?: string) {
   if (!token) {
     console.error('No token provided to uploadDocuments');
     throw new Error('Authentication required');
   }
 
-  // Remove any existing 'Bearer ' prefix
   const cleanToken = token.replace(/^Bearer\s+/i, '');
-  // Uploading documents (do not log tokens or file contents)
 
-  // Ensure we have a fresh URL each time
   const timestamp = Date.now();
   return request(`/documents?application_id=${applicationId}&t=${timestamp}`, {
     method: 'POST',
@@ -504,6 +447,7 @@ export async function uploadDocuments(applicationId: string, files: FormData, to
   });
 }
 
+// Retrieves a specific document by its ID
 export async function getDocument(documentId: string, token?: string) {
   return request(`/documents/${documentId}`, {
     method: 'GET',
@@ -511,6 +455,7 @@ export async function getDocument(documentId: string, token?: string) {
   });
 }
 
+// Retrieves all documents associated with a loan application
 export async function getApplicationDocuments(applicationId: string, token?: string) {
   if (!token) {
     console.error('No token provided to getApplicationDocuments');
@@ -523,7 +468,6 @@ export async function getApplicationDocuments(applicationId: string, token?: str
     });
   } catch (error) {
     console.log('No documents found for application, returning empty document object');
-    // Return empty document URLs if request fails
     return {
       brgy_cert_url: null,
       e_signature_personal_url: null,
@@ -537,13 +481,13 @@ export async function getApplicationDocuments(applicationId: string, token?: str
   }
 }
 
+// Updates existing documents for a loan application
 export async function updateDocuments(documentId: string, files: FormData, token?: string) {
   if (!token) {
     console.error('No token provided to updateDocuments');
     throw new Error('Authentication required');
   }
 
-  // Remove any existing 'Bearer ' prefix
   const cleanToken = token.replace(/^Bearer\s+/i, '');
   
   return request(`/documents/${documentId}`, {
@@ -555,6 +499,7 @@ export async function updateDocuments(documentId: string, files: FormData, token
   });
 }
 
+// Deletes a document by its ID
 export async function deleteDocument(documentId: string, token?: string) {
   return request(`/documents/${documentId}`, {
     method: 'DELETE',
@@ -562,6 +507,7 @@ export async function deleteDocument(documentId: string, token?: string) {
   });
 }
 
+// Deletes a single file from a loan application
 export async function deleteSingleFile(applicationId: string, field: string, token?: string) {
   const timestamp = Date.now();
   return request(`/documents/application/${applicationId}/file/${field}?t=${timestamp}`, {
@@ -575,6 +521,7 @@ export async function deleteSingleFile(applicationId: string, field: string, tok
   });
 }
 
+// Refreshes document URLs for a loan application
 export async function refreshApplicationDocumentUrls(
   applicationId: string,
   documentTypes?: string[],
@@ -585,12 +532,10 @@ export async function refreshApplicationDocumentUrls(
     throw new Error('Authentication required');
   }
 
-  // Generate unique cache-busting parameters
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(7);
   const version = Date.now().toString(36);
   
-  // Build comprehensive query string with all cache-busting parameters
   const params = new URLSearchParams();
   if (documentTypes?.length) {
     params.append('document_types', documentTypes.join(','));
@@ -600,7 +545,6 @@ export async function refreshApplicationDocumentUrls(
   params.append('v', version);
   params.append('_', Math.random().toString());
 
-  // Add comprehensive cache-busting headers
   const headers = {
     Authorization: `Bearer ${token}`,
     'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0, private',
@@ -625,11 +569,12 @@ export async function refreshApplicationDocumentUrls(
   }
 }
 
-// Health check endpoints
+// Checks if the loan service API is operational
 export async function healthCheck() {
   return request('/loans/health', { method: 'GET' });
 }
 
+// Retrieves the current status of the loan service
 export async function getServiceStatus(token?: string) {
   return request('/loans/service-status', {
     method: 'GET',

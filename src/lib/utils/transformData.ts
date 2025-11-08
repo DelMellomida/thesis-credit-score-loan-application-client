@@ -1,11 +1,10 @@
-import type { Applicant } from '@/components/ApplicantList';
-import type { ApplicationResponse, ModelInputData } from './types';
+import type { Applicant } from '@/components/loan/ApplicantList';
+import type { ApplicationResponse, ModelInputData } from '../types';
 
+// Transforms backend application response to frontend Applicant format
 export function transformToApplicant(application: ApplicationResponse): Applicant {
-  // Get the MongoDB _id from the response
   const id = application._id?.$oid || '';
 
-  // Map backend status to frontend status
   let status: 'pending' | 'approved' | 'denied';
   switch (application.status?.toLowerCase()) {
     case 'approved':
@@ -19,23 +18,18 @@ export function transformToApplicant(application: ApplicationResponse): Applican
       status = 'pending';
   }
 
-  // Extract city from address if available
-  // Defensive access for applicant_info and address
   const applicantInfo = application.applicant_info || { full_name: '', contact_number: '', address: '', salary: '0', job: '' };
   const addressParts = (applicantInfo.address || '').split(',');
   const brgyCity = addressParts.length > 1 ? addressParts[1].trim() : (addressParts[0] || '').trim();
 
-  // Helper function to check if a value exists and isn't null/undefined/empty
   const hasValue = (value: any) => value !== null && value !== undefined && value !== '';
 
-  // Helper function to format currency
   const formatCurrency = (amount: number | string | undefined) => {
     if (!amount) return undefined;
     if (typeof amount === 'string' && amount.startsWith('₱')) return amount;
     return `₱${Number(amount).toLocaleString()}`;
   };
 
-  // Helper function to format duration in years and months
   const formatDuration = (months: number | undefined) => {
     if (!months) return undefined;
     const years = Math.floor(months / 12);
@@ -45,10 +39,8 @@ export function transformToApplicant(application: ApplicationResponse): Applican
     return `${years} years ${remainingMonths} months`;
   };
 
-  // Get model input data with safe access and proper typing
   const modelData = application.model_input_data || {} as ModelInputData;
 
-  // Transform backend data into the expected formData structure with improved value handling
   const formData = {
     personal: {
       fullName: applicantInfo.full_name,
@@ -83,14 +75,12 @@ export function transformToApplicant(application: ApplicationResponse): Applican
     }
   };
 
-  // Format credit score with 2 decimal places and get recommendation count if exists
   const predictionResult = application.prediction_result;
   const creditScore = predictionResult?.final_credit_score 
     ? predictionResult.final_credit_score.toFixed(2)
     : 'N/A';
   const recommendationCount = predictionResult?.recommendation_count || 0;
 
-  // Format salary with proper currency display
   const salaryDisplay = application.model_input_data?.Net_Salary_Per_Cutoff 
     ? `₱${application.model_input_data.Net_Salary_Per_Cutoff.toString()}` 
     : (applicantInfo.salary && typeof applicantInfo.salary === 'string' && applicantInfo.salary.startsWith('₱')) 
@@ -101,11 +91,11 @@ export function transformToApplicant(application: ApplicationResponse): Applican
     id,
     name: applicantInfo.full_name,
     brgyCity: brgyCity,
-    email: applicantInfo.contact_number, // Using contact number since email isn't available
+    email: applicantInfo.contact_number,
     loanProduct: `Job: ${applicantInfo.job || 'N/A'}`,
     loanAmount: `${salaryDisplay} | Score: ${creditScore} (${recommendationCount} recommendations)`,
     status: status,
     formData: formData,
-    timestamp: application.timestamp || new Date().toISOString() // Include the timestamp
+    timestamp: application.timestamp || new Date().toISOString()
   };
 }

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, CheckCircle, XCircle, Eye, Loader2, AlertCircle } from 'lucide-react';
-import { Input } from './ui/input';
-import { Button } from './ui/button';
+import { Input } from '../ui/input';
+import { Button } from '../ui/button';
 import {
   Table,
   TableBody,
@@ -9,7 +9,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from './ui/table';
+} from '../ui/table';
 import {
   Select,
   SelectContent,
@@ -18,7 +18,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from './ui/select';
+} from '../ui/select';
 import {
   Pagination,
   PaginationContent,
@@ -26,10 +26,10 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from './ui/pagination';
-import { Card, CardContent } from './ui/card';
-import { getAllApplications, updateApplicationStatus } from '@/lib/api';
-import { useAuth } from '@/context/AuthContext';
+} from '../ui/pagination';
+import { Card, CardContent } from '../ui/card';
+import { getAllApplications, updateApplicationStatus } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 export interface Applicant {
   id: string;
@@ -40,7 +40,7 @@ export interface Applicant {
   loanAmount: string;
   status: 'pending' | 'approved' | 'denied' | 'cancelled';
   formData: any;
-  timestamp: string;  // ISO string timestamp
+  timestamp: string;
 }
 
 interface ApplicantsListProps {
@@ -53,7 +53,7 @@ interface ApplicantsListProps {
 export function ApplicantsList({
   onViewEdit,
 }: Partial<ApplicantsListProps>) {
-  const { user } = useAuth(); // Get user from auth context
+  const { user } = useAuth(); 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -69,21 +69,18 @@ export function ApplicantsList({
   });
   const itemsPerPage = 6;
 
-  // Monitor auth state changes
   useEffect(() => {
     if (!user) {
       setError('Authentication required');
     }
   }, [user]);
 
-  // Fetch applications with total count
   const fetchApplications = async () => {
     const token = user?.token;
     try {
       setIsLoading(true);
       setError(null);
       
-      // Get paginated data with metadata and counts (already sorted by timestamp from backend)
       const { data, total, pages, counts } = await getAllApplications(
         token, 
         currentPage, 
@@ -92,7 +89,6 @@ export function ApplicantsList({
         searchQuery || undefined
       );
 
-      // Update states with paginated data and total counts
       setApplicants(data);
       setTotalPages(pages);
       setTotalStats({
@@ -118,18 +114,16 @@ export function ApplicantsList({
     }
   };
 
-  // Debounce search query changes
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-    }, 300); // Wait 300ms after last change before updating
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Combined fetch effect with proper dependencies
   useEffect(() => {
     if (!user?.token) {
       setError('Authentication required. Please log in.');
@@ -141,7 +135,6 @@ export function ApplicantsList({
     }
   }, [user?.token, currentPage, statusFilter, debouncedSearch]);
 
-  // Handle approve/deny actions
   const handleApprove = async (id: string) => {
     const token = user?.token;
     if (!token) {
@@ -152,9 +145,8 @@ export function ApplicantsList({
     try {
       setIsLoading(true);
       setError(null);
-      // Process approval request
       await updateApplicationStatus(id, 'approved', token);
-      await fetchApplications(); // Refresh the list
+      await fetchApplications();
     } catch (error) {
       console.error('Application approval failed');
       if (error instanceof Error && error.message.includes('Not authenticated')) {
@@ -177,9 +169,8 @@ export function ApplicantsList({
     try {
       setIsLoading(true);
       setError(null);
-      // Process denial request
       await updateApplicationStatus(id, 'denied', token);
-      await fetchApplications(); // Refresh the list
+      await fetchApplications();
     } catch (error) {
       console.error('Application denial failed');
       if (error instanceof Error && error.message.includes('Not authenticated')) {
@@ -202,9 +193,8 @@ export function ApplicantsList({
     try {
       setIsLoading(true);
       setError(null);
-      // Process cancellation request
       await updateApplicationStatus(id, 'cancelled', token);
-      await fetchApplications(); // Refresh the list
+      await fetchApplications();
     } catch (error) {
         console.error('Application cancellation failed');
       if (error instanceof Error && error.message.includes('Not authenticated')) {
@@ -217,21 +207,16 @@ export function ApplicantsList({
     }
   };
 
-  // Use the total stats for summary counts
   const totalApplicants = totalStats.total;
   const approvedCount = totalStats.approved;
   const deniedCount = totalStats.denied;
   const cancelledCount = totalStats.cancelled;
   const pendingCount = totalStats.pending;
 
-  // State for total pages
   const [totalPages, setTotalPages] = useState(1);
 
-  // Filtered results are now handled by the backend
   const currentApplicants = applicants;
   
-
-  // Reset to page 1 when search changes
   React.useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
@@ -250,7 +235,6 @@ export function ApplicantsList({
 
   return (
     <div className="h-full flex flex-col gap-6 overflow-hidden">
-      {/* Summary Cards */}
       <div className="grid grid-cols-5 gap-4">
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="p-4">
@@ -298,8 +282,6 @@ export function ApplicantsList({
         </Card>
       </div>
 
-      {/* Search Bar and Pagination Row */}
-      {/* Error Message */}
       {error && (
         <Card className="bg-red-50 border-red-200">
           <CardContent className="p-4 flex items-center gap-2 text-red-700">
@@ -309,9 +291,7 @@ export function ApplicantsList({
         </Card>
       )}
 
-      {/* Search Bar Row */}
       <div className="flex gap-4">
-        {/* Status Filter */}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filter by status" />
@@ -328,7 +308,6 @@ export function ApplicantsList({
           </SelectContent>
         </Select>
 
-        {/* Search Bar */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
@@ -341,7 +320,6 @@ export function ApplicantsList({
         </div>
       </div>
 
-      {/* Table */}
       <Card className="flex-1 overflow-hidden">
         <Table>
           <TableHeader>
@@ -449,7 +427,6 @@ export function ApplicantsList({
         </Table>
       </Card>
 
-      {/* Pagination - show if we have pages to navigate */}
       {totalPages > 1 && (
         <div className="flex justify-center mt-4">
           <Pagination>
@@ -466,26 +443,21 @@ export function ApplicantsList({
                 const pages = [];
                 
                 if (totalPages <= 5) {
-                  // Show all pages if 5 or fewer
                   for (let i = 1; i <= totalPages; i++) {
                     pages.push(i);
                   }
                 } else {
-                  // Show smart pagination with ellipses
                   if (currentPage <= 3) {
-                    // Near the start: 1 2 3 4 ...
                     for (let i = 1; i <= Math.min(4, totalPages); i++) {
                       pages.push(i);
                     }
                     if (totalPages > 4) pages.push('...');
                   } else if (currentPage >= totalPages - 2) {
-                    // Near the end: ... 7 8 9 10
                     pages.push('...');
                     for (let i = Math.max(1, totalPages - 3); i <= totalPages; i++) {
                       pages.push(i);
                     }
                   } else {
-                    // In the middle: ... 4 5 6 ...
                     pages.push('...', currentPage - 1, currentPage, currentPage + 1, '...');
                   }
                 }
