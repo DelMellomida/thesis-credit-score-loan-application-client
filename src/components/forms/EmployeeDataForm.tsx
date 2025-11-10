@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { EmployeeData } from '../../app/page';
 import { Upload, Check, X } from 'lucide-react';
 import { EMPLOYMENT_SECTOR, SALARY_FREQUENCY } from "../../lib/utils/constants";
+import { validatePosition } from "../../lib/forms/positionValidation";
 
 type FileType = 'payslip' | 'companyId' | 'profilePhoto' | 'validId' | 'brgyCert' | 'proofOfBilling' | 'eSignaturePersonal' | 'eSignatureCoMaker';
 
@@ -71,7 +72,14 @@ export function EmployeeDataForm({ data, updateData, onFileUpload, existingFiles
   }, [existingFiles]);
 
   const handleInputChange = (field: keyof EmployeeData, value: string) => {
+    // Allow direct typing for all fields including position
     updateData({ [field]: value });
+  };
+
+  // Handle position validation on blur (when user finishes typing)
+  const handlePositionBlur = (value: string) => {
+    const validatedPosition = validatePosition(value);
+    updateData({ position: validatedPosition });
   };
 
   const handleFileUpload = async (
@@ -222,6 +230,7 @@ export function EmployeeDataForm({ data, updateData, onFileUpload, existingFiles
             id="position"
             value={data.position}
             onChange={(e) => handleInputChange('position', e.target.value)}
+            onBlur={(e) => handlePositionBlur(e.target.value)}
             placeholder="Enter job position"
           />
         </div>
