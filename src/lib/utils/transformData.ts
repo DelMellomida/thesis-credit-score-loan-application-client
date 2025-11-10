@@ -91,7 +91,7 @@ export function transformToApplicant(application: ApplicationResponse): Applican
     id,
     name: applicantInfo.full_name,
     brgyCity: brgyCity,
-    email: applicantInfo.contact_number,
+    contact_number: applicantInfo.contact_number,
     loanProduct: `Job: ${applicantInfo.job || 'N/A'}`,
     loanAmount: `${salaryDisplay} | Score: ${creditScore} (${recommendationCount} recommendations)`,
     status: status,

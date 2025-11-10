@@ -35,7 +35,7 @@ export interface Applicant {
   id: string;
   name: string;
   brgyCity: string;
-  email: string;
+  contact_number: string;
   loanProduct: string;
   loanAmount: string;
   status: 'pending' | 'approved' | 'denied' | 'cancelled';
@@ -312,7 +312,7 @@ export function ApplicantsList({
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             type="text"
-            placeholder="Search by name, email, loan product, or amount..."
+            placeholder="Search by name, contact number, loan product, or amount..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -326,7 +326,7 @@ export function ApplicantsList({
             <TableRow>
               <TableHead className="w-[180px]">Name</TableHead>
               <TableHead className="w-[150px]">Brgy/City</TableHead>
-              <TableHead className="w-[200px]">Email</TableHead>
+              <TableHead className="w-[200px]">Contact Number</TableHead>
               <TableHead className="w-[160px]">Loan Product</TableHead>
               <TableHead className="w-[130px]">Loan Amount</TableHead>
               <TableHead className="w-[120px] text-center">Actions</TableHead>
@@ -362,8 +362,8 @@ export function ApplicantsList({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="max-w-[200px]" title={applicant.email}>
-                      {truncateText(applicant.email, 28)}
+                    <div className="max-w-[200px]" title={applicant.contact_number}>
+                      {truncateText(applicant.contact_number, 28)}
                     </div>
                   </TableCell>
                   <TableCell>

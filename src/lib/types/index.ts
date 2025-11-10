@@ -23,6 +23,7 @@ export interface ModelInputData {
 export interface ApplicantInfo {
   full_name: string;
   contact_number: string;
+  email: string;
   address: string;
   salary: string;
   job: string;
