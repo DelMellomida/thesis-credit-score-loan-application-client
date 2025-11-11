@@ -435,7 +435,11 @@ export async function uploadDocuments(applicationId: string, files: FormData, to
   const cleanToken = token.replace(/^Bearer\s+/i, '');
 
   const timestamp = Date.now();
-  return request(`/documents?application_id=${applicationId}&t=${timestamp}`, {
+  // Use a trailing slash on the documents collection path to avoid automatic 307
+  // redirects from FastAPI (which can preserve method and confuse clients).
+  // This prevents an extra round-trip and avoids edge cases where the browser
+  // might attempt an HTTPS retry on redirect.
+  return request(`/documents/?application_id=${applicationId}&t=${timestamp}`, {
     method: 'POST',
     body: files,
     headers: {

@@ -283,6 +283,12 @@ export function ApplicantOverview({
   }, [applicant.id, user?.token]);
 
   const isUrlExpiringSoon = (url: string) => {
+    // Blob and data URLs are client-generated previews and should not be
+    // considered for signed-url refresh logic. Treat them as non-expiring so
+    // we don't trigger unnecessary refreshes or upload loops.
+    if (!url) return true;
+    if (url.startsWith('blob:') || url.startsWith('data:')) return false;
+
     try {
       const urlObj = new URL(url);
       const expiryParam = urlObj.searchParams.get('X-Amz-Expires');
@@ -323,7 +329,7 @@ export function ApplicantOverview({
       
       const timestamp = Date.now();
       const refreshed = await refreshApplicationDocumentUrls(
-        `${applicationUUID}?t=${timestamp}&noCache=${Math.random()}`,
+        applicationUUID,
         documentTypes,
         user.token
       );
@@ -553,7 +559,7 @@ export function ApplicantOverview({
       const randomStr = Math.random().toString(36).substring(7);
       
       const refreshResult = await refreshApplicationDocumentUrls(
-        `${applicationUUID}?t=${timestamp}&r=${randomStr}`,
+        applicationUUID,
         [docType],
         user.token
       );
@@ -884,25 +890,27 @@ export function ApplicantOverview({
                           onError={async (e) => {
                             console.error('Failed to load profile photo:', profilePhoto);
                             
-                            e.currentTarget.src = '';
+                            if (e.currentTarget) e.currentTarget.src = '';
                             
                             try {
                               if (applicationUUID && user?.token) {
                                 const timestamp = Date.now();
                                 const refreshed = await refreshApplicationDocumentUrls(
-                                  `${applicationUUID}?t=${timestamp}&noCache=${Math.random()}`,
+                                  applicationUUID,
                                   ['profile_photo'],
                                   user.token
                                 );
                                 
                                 if (refreshed && refreshed.profile_photo_url) {
-                                  const newUrl = refreshed.profile_photo_url + 
+                                  const newUrl = refreshed.profile_photo_url +
                                     (refreshed.profile_photo_url.includes('?') ? '&' : '?') +
                                     `t=${timestamp}&noCache=${Math.random()}`;
-                                  
+
                                   setProfilePhoto(newUrl);
-                                  
-                                  e.currentTarget.src = newUrl;
+
+                                  if (e.currentTarget) {
+                                    e.currentTarget.src = newUrl;
+                                  }
                                   return;
                                 }
                               }
@@ -910,7 +918,9 @@ export function ApplicantOverview({
                               console.error('Error refreshing profile photo URL:', error);
                             }
                             
-                            e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>';
+                            if (e.currentTarget) {
+                              e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>';
+                            }
                           }}
                         />
                       </div>
@@ -951,14 +961,14 @@ export function ApplicantOverview({
                             console.error('Failed to load ID photo:', idPhoto);
                             
                             // Clear source to prevent cached version
-                            e.currentTarget.src = '';
+                            if (e.currentTarget) e.currentTarget.src = '';
                             
                             try {
                               // Force immediate refresh of the URL
                               if (applicationUUID && user?.token) {
                                 const timestamp = Date.now();
                                 const refreshed = await refreshApplicationDocumentUrls(
-                                  `${applicationUUID}?t=${timestamp}&noCache=${Math.random()}`,
+                                  applicationUUID,
                                   ['valid_id'],
                                   user.token
                                 );
@@ -973,7 +983,7 @@ export function ApplicantOverview({
                                   setIdPhoto(newUrl);
                                   
                                   // Update image source
-                                  e.currentTarget.src = newUrl;
+                                  if (e.currentTarget) e.currentTarget.src = newUrl;
                                   return;
                                 }
                               }
@@ -982,7 +992,7 @@ export function ApplicantOverview({
                             }
                             
                             // Show fallback if refresh failed
-                            e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h10"/></svg>';
+                            if (e.currentTarget) e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h10"/></svg>';
                           }}
                         />
                       </div>
@@ -1641,7 +1651,7 @@ const DocumentUploadField: React.FC<DocumentUploadFieldProps> = ({
                     console.error(`Failed to load ${label}:`, preview);
                     
                     // Clear source to prevent cached version
-                    e.currentTarget.src = '';
+                    if (e.currentTarget) e.currentTarget.src = '';
                     
                     try {
                       if (applicationUUID && user?.token) {
@@ -1660,7 +1670,7 @@ const DocumentUploadField: React.FC<DocumentUploadFieldProps> = ({
                         
                         if (documentType) {
                           const refreshed = await refreshApplicationDocumentUrls(
-                            `${applicationUUID}?t=${timestamp}&noCache=${Math.random()}`,
+                            applicationUUID,
                             [documentType],
                             user.token
                           );
