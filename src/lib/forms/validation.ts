@@ -6,7 +6,7 @@ export interface ValidationResult {
 }
 
 export const Enums = {
-  JOBS: ["Teacher", "Security Guard", "Seaman", "Others"] as const,
+  // JOBS whitelist removed to allow free-text job/position values from the user
   EMPLOYMENT_SECTORS: ["Public", "Private"] as const,
   SALARY_FREQUENCIES: ["Monthly", "Bimonthly", "Biweekly", "Weekly"] as const,
   HOUSING: ["Owned", "Rented"] as const,
@@ -58,10 +58,11 @@ export function validateFullApplication(payload: any, isUpdate: boolean = false)
     errors.push('Salary is required');
   }
 
-  if (!applicant.job) {
+  if (!applicant.job || typeof applicant.job !== 'string' || !applicant.job.trim()) {
     errors.push('Job is required');
-  } else if (!["Teacher", "Security Guard", "Seaman"].includes(applicant.job)) {
-    transformedData.applicant_info.job = "Others";
+  } else {
+    // Preserve user-provided job value but trim it for safety
+    transformedData.applicant_info.job = applicant.job.trim();
   }
 
   const comaker = transformedData.comaker_info || {};

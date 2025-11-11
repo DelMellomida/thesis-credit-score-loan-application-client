@@ -655,10 +655,8 @@ export function ApplicantOverview({
           full_name: editableData.personal.fullName || "",
           contact_number: editableData.personal.contactNo || "",
           address: editableData.personal.address || "",
-          salary: editableData.employee.salary || "1",
-          job: editableData.employee.position === "Security Guard" ? "Security Guard" :
-               editableData.employee.position === "Seaman" ? "Seaman" :
-               editableData.employee.position === "Teacher" ? "Teacher" : "Others"
+      salary: editableData.employee.salary || "1",
+      job: validatePosition(editableData.employee.position)
         },
         comaker_info: {
           full_name: editableData.coMaker.fullName || "",
@@ -1095,7 +1093,7 @@ export function ApplicantOverview({
                     />
                   </div>
                   <PositionField
-                    value={validatePosition(editableData.employee.position)}
+                    value={editableData.employee.position}
                     onChange={(value) => handleInputChange('employee', 'position', value)}
                   />
                   <div>

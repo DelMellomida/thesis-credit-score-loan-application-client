@@ -176,6 +176,8 @@ export function ProcessForm({
 
       // Add the request data
       const payload = transformLoanFormData(formData);
+        // Debugging: log the payload being submitted so we can confirm the job/position value
+        console.log('[ProcessForm] Submitting payload:', payload);
         const validation = validateFullApplication(payload);
         if (!validation.valid) {
           toast.error('Validation failed', { description: validation.errors.join('; ') });
