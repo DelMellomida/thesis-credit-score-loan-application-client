@@ -790,55 +790,60 @@ export function ApplicantOverview({
   };
 
   return (
-    <div className="h-full flex flex-col gap-4 overflow-hidden">
+    <div className="h-full flex flex-col gap-0 overflow-hidden bg-white">
       {previewImage && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
           onClick={() => setPreviewImage(null)}
         >
           <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
             <Button
               variant="ghost"
               size="icon"
-              className="absolute top-2 right-2 bg-white/10 hover:bg-white/20 text-white"
+              className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white rounded-full"
               onClick={() => setPreviewImage(null)}
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </Button>
             <img
               src={previewImage}
               alt="Full size preview"
-              className="max-w-full max-h-full object-contain"
+              className="max-w-full max-h-full object-contain rounded-lg"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+
+      {/* Header - Improved Design */}
+      <div className="bg-gradient-to-r from-red-600 to-red-700 text-white px-8 py-6 shadow-lg flex items-center justify-between">
+        <div className="flex items-center gap-4">
           <Button
             variant="outline"
             size="sm"
             onClick={onBack}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-white/20 border-white/30 text-white hover:bg-white/30 rounded-lg"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
-          <h2 className="text-2xl">Applicant Overview</h2>
+          <div>
+            <h2 className="text-2xl font-bold">Application Overview</h2>
+            <p className="text-red-100 text-sm">Review and manage applicant information</p>
+          </div>
         </div>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="text-red-100 hover:text-white hover:bg-red-700 rounded-lg h-10 w-10"
             >
               <Trash2 className="h-5 w-5" />
               <span className="sr-only">Delete Application</span>
             </Button>
           </AlertDialogTrigger>
-          <AlertDialogContent>
+          <AlertDialogContent className="rounded-lg">
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Loan Application</AlertDialogTitle>
               <AlertDialogDescription>
@@ -846,7 +851,7 @@ export function ApplicantOverview({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={async () => {
                   if (!user?.token || !applicationUUID) return;
@@ -857,7 +862,7 @@ export function ApplicantOverview({
                     console.error('Error deleting application:', error);
                   }
                 }}
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-red-600 hover:bg-red-700 rounded-lg"
               >
                 Delete
               </AlertDialogAction>
@@ -866,8 +871,8 @@ export function ApplicantOverview({
         </AlertDialog>
       </div>
 
-      {/* Main Content */}
-      <div className="flex gap-6 flex-1 overflow-hidden">
+      {/* Main Content - Improved Spacing and Layout */}
+      <div className="flex gap-6 flex-1 overflow-hidden px-8 py-6">
         {/* Left Side - Borrower Details */}
         <div className="flex-1 overflow-auto">
           <Card>
@@ -1023,7 +1028,7 @@ export function ApplicantOverview({
               {/* Personal Data */}
               <div className="space-y-4">
                 <h3 className="text-lg border-b pb-2">Personal Data</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-6">
                   <div>
                     <Label>Full Name</Label>
                     <Input
@@ -1087,7 +1092,7 @@ export function ApplicantOverview({
               {/* Employee Data */}
               <div className="space-y-4">
                 <h3 className="text-lg border-b pb-2">Employee Data</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-6">
                   <div>
                     <Label>Company Name</Label>
                     <Input
@@ -1147,7 +1152,7 @@ export function ApplicantOverview({
               {/* Other Data */}
               <div className="space-y-4">
                 <h3 className="text-lg border-b pb-2">Other Data</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-6">
                   <div>
                     <Label>Community Position</Label>
                     <select
@@ -1206,7 +1211,7 @@ export function ApplicantOverview({
               {/* Co-Maker Data */}
               <div className="space-y-4">
                 <h3 className="text-lg border-b pb-2">Co-Maker Data</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-6">
                   <div>
                     <Label>Full Name</Label>
                     <Input
@@ -1270,7 +1275,7 @@ export function ApplicantOverview({
         </div>
 
         {/* Right Side - Summary & Documents (Scrollable) */}
-        <div className="w-96">
+        <div className="w-[520px]">
           <ScrollArea className="h-full">
             <div className="space-y-4 pr-4">
               {/* Summary Carousel */}
@@ -1552,24 +1557,24 @@ export function ApplicantOverview({
           </ScrollArea>
         </div>
       </div>
-      {/* Save Changes Button in a sticky footer */}
-      <div className="sticky bottom-0 left-0 right-0 bg-white border-t py-4 px-6 mt-4">
-        <div className="max-w-screen-xl mx-auto flex justify-between items-center">
+      {/* Save Changes Button - Improved Footer */}
+      <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-8 py-4 shadow-lg">
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-gray-600">
+            💾 Auto-saving document changes...
+          </div>
           <Button 
             onClick={handleSave}
             disabled={isSaving}
-            className={`flex items-center gap-2 ${
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold transition-all ${
               isSaving 
-                ? 'bg-blue-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700'
-            } text-white`}
+                ? 'bg-blue-400 cursor-not-allowed text-white' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
+            }`}
           >
             <Save className={`h-4 w-4 ${isSaving ? 'animate-spin' : ''}`} />
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
-          <div className="text-sm text-gray-500">
-            All changes will be saved automatically
-          </div>
         </div>
       </div>
     </div>

@@ -1,6 +1,21 @@
 import type { Applicant } from '@/components/loan/ApplicantList';
 import { transformToApplicant } from '../utils/transformData';
 import type { ApplicationResponse } from '../types';
+import { getPendingUploads, setPendingUpload, removePendingUpload, PendingUploadMeta } from '../utils/storage';
+
+// Simple UUID generator. Prefer crypto.randomUUID when available.
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    // @ts-ignore
+    return crypto.randomUUID();
+  }
+  // Fallback
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -38,30 +53,41 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     const requestUrl = `${API_URL}${endpoint}`;
     const hasAuth = 'Authorization' in headers;
 
-    try {
-      const isDocumentRequest = endpoint.startsWith('/documents/');
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(7);
-      const url = isDocumentRequest 
-        ? `${requestUrl}${requestUrl.includes('?') ? '&' : '?'}t=${timestamp}&noCache=${random}&v=${timestamp}`
-        : requestUrl;
+    const isDocumentRequest = endpoint.startsWith('/documents/');
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(7);
+    const url = isDocumentRequest
+      ? `${requestUrl}${requestUrl.includes('?') ? '&' : '?'}t=${timestamp}&noCache=${random}&v=${timestamp}`
+      : requestUrl;
 
-      if (isDocumentRequest) {
-        headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0';
-        headers['Pragma'] = 'no-cache';
-        headers['Expires'] = '0';
-        headers['Surrogate-Control'] = 'no-store';
-        headers['If-None-Match'] = `"${timestamp}-${random}"`;
-        headers['If-Modified-Since'] = new Date(0).toUTCString();
-      }
-      
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        credentials: 'include',
-      });
+    if (isDocumentRequest) {
+      headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0';
+      headers['Pragma'] = 'no-cache';
+      headers['Expires'] = '0';
+      headers['Surrogate-Control'] = 'no-store';
+      headers['If-None-Match'] = `"${timestamp}-${random}"`;
+      headers['If-Modified-Since'] = new Date(0).toUTCString();
+    }
 
-      if (!response.ok) {
+    const MAX_RETRIES = 2;
+    let attempt = 0;
+    let lastError: any = null;
+
+    while (attempt <= MAX_RETRIES) {
+      attempt += 1;
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return data;
+        }
+
+        // Handle authentication refresh flow
         if (response.status === 401 && shouldRefresh && headers.Authorization) {
           const storedUser = localStorage.getItem('authUser');
           if (!storedUser) {
@@ -92,35 +118,48 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
             headers.Authorization = `Bearer ${access_token}`;
 
-            return executeRequest(false);
+            // Retry immediately once with refreshed token
+            continue;
           } catch (error) {
             console.error('Token refresh failed:', error);
             throw error;
           }
         }
 
+        // Retry for server errors or rate limiting
+        if ((response.status >= 500 || response.status === 429) && attempt <= MAX_RETRIES) {
+          const backoff = Math.pow(2, attempt) * 200 + Math.random() * 100;
+          await new Promise(res => setTimeout(res, backoff));
+          continue;
+        }
+
+        // Non-retryable error: try to parse JSON error body
         const contentType = response.headers.get('content-type');
-        let errorData;
-        
+        let errorData: any;
         try {
-          errorData = contentType?.includes('application/json') 
-            ? await response.json()
-            : { message: response.statusText };
+          errorData = contentType?.includes('application/json') ? await response.json() : { message: response.statusText };
         } catch {
           errorData = { message: response.statusText };
         }
 
         console.error('API Error: status=' + response.status + ' statusText=' + response.statusText);
-
         throw new Error(errorData.detail || errorData.message || 'API error');
-      }
+      } catch (error) {
+        lastError = error;
+        // Network or unexpected error: retry if attempts remain
+        if (attempt <= MAX_RETRIES) {
+          const backoff = Math.pow(2, attempt) * 200 + Math.random() * 100;
+          await new Promise(res => setTimeout(res, backoff));
+          continue;
+        }
 
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Request failed: ' + (error instanceof Error ? error.message : (error ? String(error) : 'Unknown error')));
-      throw error;
+        console.error('Request failed: ' + (error instanceof Error ? error.message : (error ? String(error) : 'Unknown error')));
+        throw lastError;
+      }
     }
+
+    // If loop exits unexpectedly
+    throw lastError || new Error('Request failed');
   };
 
   return executeRequest();
@@ -433,22 +472,58 @@ export async function uploadDocuments(applicationId: string, files: FormData, to
   }
 
   const cleanToken = token.replace(/^Bearer\s+/i, '');
+  // Generate an idempotency key for this upload so retries won't create duplicates
+  const idempotencyKey = generateUUID();
 
-  const timestamp = Date.now();
-  // Use a trailing slash on the documents collection path to avoid automatic 307
-  // redirects from FastAPI (which can preserve method and confuse clients).
-  // This prevents an extra round-trip and avoids edge cases where the browser
-  // might attempt an HTTPS retry on redirect.
-  return request(`/documents/?application_id=${applicationId}&t=${timestamp}`, {
-    method: 'POST',
-    body: files,
-    headers: {
-      'Authorization': `Bearer ${cleanToken}`,
-      'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    }
-  });
+  // Persist minimal metadata about this pending upload so the UI can offer resume/retry
+  try {
+    const meta = {
+      id: idempotencyKey,
+      applicationId,
+      fileName: undefined,
+      fileSize: undefined,
+      mimeType: undefined,
+      createdAt: Date.now(),
+      status: 'pending'
+    } as PendingUploadMeta;
+    setPendingUpload(meta);
+  } catch (e) {
+    console.warn('Failed to persist pending upload metadata', e);
+  }
+
+  try {
+    // The central request() helper already appends cache-busting query params for
+    // document requests. Do not add a duplicate `t=` parameter here to avoid
+    // producing URLs with duplicate query keys which can confuse proxies or
+    // lead to inconsistent preflight behavior.
+    const res = await request(`/documents/?application_id=${applicationId}`, {
+      method: 'POST',
+      body: files,
+      headers: {
+        'Authorization': `Bearer ${cleanToken}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Idempotency-Key': idempotencyKey
+      }
+    });
+
+    // On success remove pending metadata
+    try { removePendingUpload(idempotencyKey); } catch {}
+
+    return res;
+  } catch (err) {
+    // Mark as failed in local metadata (best effort)
+    try {
+      const existing = getPendingUploads();
+      const idx = existing.findIndex(e => e.id === idempotencyKey);
+      if (idx !== -1) {
+        existing[idx].status = 'failed';
+        localStorage.setItem('pending_uploads_v1', JSON.stringify(existing));
+      }
+    } catch {}
+    throw err;
+  }
 }
 
 // Retrieves a specific document by its ID
@@ -584,4 +659,57 @@ export async function getServiceStatus(token?: string) {
     method: 'GET',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
+}
+
+// Retrieves aggregated applicant report (labels + series + totals)
+export async function getApplicantReport(
+  params: { start_date: string; end_date: string; group_by?: 'day' | 'month' | 'year'; status?: string; loan_officer_id?: string },
+  token?: string
+) {
+  const qp = new URLSearchParams();
+  qp.append('start_date', params.start_date);
+  qp.append('end_date', params.end_date);
+  qp.append('group_by', params.group_by || 'day');
+  if (params.status) qp.append('status', params.status);
+  if (params.loan_officer_id) qp.append('loan_officer_id', params.loan_officer_id);
+
+  return request(`/reports/applicants?${qp.toString()}`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+}
+
+// Exports applicant report as CSV (returns a Blob). For CSV downloads, prefer window.location navigation
+// for simple cases; this returns a Blob so callers can trigger a download programmatically.
+export async function exportApplicantReport(
+  params: { start_date: string; end_date: string; group_by?: 'day' | 'month' | 'year'; status?: string; loan_officer_id?: string },
+  token?: string,
+  format: 'csv' | 'pdf' = 'csv'
+) {
+  const qp = new URLSearchParams();
+  qp.append('start_date', params.start_date);
+  qp.append('end_date', params.end_date);
+  qp.append('group_by', params.group_by || 'day');
+  if (params.status) qp.append('status', params.status);
+  if (params.loan_officer_id) qp.append('loan_officer_id', params.loan_officer_id);
+  qp.append('format', format);
+
+  const url = `${API_URL}/reports/applicants/export?${qp.toString()}`;
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    const clean = token.replace(/^Bearer\s+/i, '');
+    headers['Authorization'] = `Bearer ${clean}`;
+  }
+
+  const res = await fetch(url, { method: 'GET', headers, credentials: 'include' });
+  if (!res.ok) {
+    const contentType = res.headers.get('content-type');
+    let err;
+    try { err = contentType?.includes('application/json') ? await res.json() : { message: res.statusText }; } catch { err = { message: res.statusText }; }
+    throw new Error(err.detail || err.message || 'Export failed');
+  }
+
+  const blob = await res.blob();
+  return blob;
 }

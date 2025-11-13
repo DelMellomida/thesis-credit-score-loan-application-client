@@ -324,55 +324,75 @@ export function ProcessForm({
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-center mb-6">
-          Loan Application Process
-        </CardTitle>
-        <StepProgress
-          currentStep={currentStep}
-          totalSteps={4}
-          steps={steps}
-          onStepClick={goToStep}
-        />
+    <Card className="w-full h-full flex flex-col border-gray-200 shadow-lg">
+      <CardHeader className="pb-6 bg-gradient-to-r from-red-50 to-orange-50 border-b border-gray-200">
+        <div className="space-y-4">
+          <div>
+            <CardTitle className="text-3xl text-gray-900 mb-2">
+              Loan Application Form
+            </CardTitle>
+            <p className="text-gray-500 text-sm">Complete all sections to submit your application</p>
+          </div>
+          <StepProgress
+            currentStep={currentStep}
+            totalSteps={4}
+            steps={steps}
+            onStepClick={goToStep}
+          />
+        </div>
       </CardHeader>
 
-      <CardContent>
-        <div className="mb-8">{renderStepForm()}</div>
+      <CardContent className="flex-1 overflow-y-auto py-8 px-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="mb-12">{renderStepForm()}</div>
+        </div>
+      </CardContent>
 
-        {/* Navigation Buttons */}
-        <div className="flex justify-between items-center pt-6 border-t">
+      {/* Navigation Buttons - Sticky Footer */}
+      <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-8 py-6 shadow-lg">
+        <div className="max-w-2xl mx-auto flex justify-between items-center gap-4">
           <Button
             variant="outline"
             onClick={prevStep}
             disabled={currentStep === 1}
-            className="border-red-600 text-red-600 hover:bg-red-50"
+            className="px-8 py-2.5 border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Back
+            ← Previous
           </Button>
 
-          {/* <Button onClick={handleSubmit} className="ml-auto">Submit Application</Button> */}
+          <div className="text-center flex-1">
+            <p className="text-sm text-gray-500">
+              Step {currentStep} of 4
+            </p>
+          </div>
 
           <div className="flex gap-3">
             {currentStep < 4 ? (
               <Button
                 onClick={nextStep}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                className="px-8 py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-md hover:shadow-lg transition-all"
               >
-                Next
+                Next →
               </Button>
             ) : (
               <Button
                 onClick={handleSubmit}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                className="px-8 py-2.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Submitting...' : 'Submit Application'}
+                {isSubmitting ? (
+                  <>
+                    <span className="inline-block animate-spin mr-2">⟳</span>
+                    Submitting...
+                  </>
+                ) : (
+                  '✓ Submit Application'
+                )}
               </Button>
             )}
           </div>
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }

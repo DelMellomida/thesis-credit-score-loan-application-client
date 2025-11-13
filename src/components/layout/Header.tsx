@@ -1,5 +1,7 @@
+"use client";
 import React, { useState } from 'react';
-import { User, LogOut, ClipboardList, FileText } from 'lucide-react';
+import { User, LogOut, ClipboardList, FileText, BarChart } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { useAuth } from '../../context/AuthContext';
@@ -12,15 +14,39 @@ interface HeaderProps {
 export function Header({ currentView, onToggleView }: HeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { logout, user } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const isOnDashboard = pathname?.startsWith('/dashboard');
   
-  const currentDateTime = new Date().toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
+  // Show current time in Philippine Time (PHT) / Asia/Manila
+  const [currentDateTime, setCurrentDateTime] = useState(() => {
+    return new Date().toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
   });
+
+  // Update the displayed time every 30 seconds to keep it current
+  React.useEffect(() => {
+    const t = setInterval(() => {
+      setCurrentDateTime(new Date().toLocaleString('en-PH', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      }));
+    }, 30_000);
+
+    return () => clearInterval(t);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -69,6 +95,25 @@ export function Header({ currentView, onToggleView }: HeaderProps) {
                   <ButtonIcon className="h-4 w-4" />
                   {currentView === 'loan-process' ? 'View Applicants List' : 'New Application'}
                 </Button>
+                {!isOnDashboard ? (
+                  <Button
+                    onClick={() => { router.push('/dashboard'); setIsOpen(false); }}
+                    variant="outline"
+                    className="w-full flex items-center gap-2 text-green-600 border-green-600 hover:bg-green-50 cursor-pointer"
+                  >
+                    <BarChart className="h-4 w-4" />
+                    Dashboard
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => { router.push('/'); setIsOpen(false); }}
+                    variant="outline"
+                    className="w-full flex items-center gap-2 text-blue-600 border-blue-600 hover:bg-blue-50 cursor-pointer"
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    Applicants List
+                  </Button>
+                )}
                 <Button
                   onClick={handleLogout}
                   variant="outline"

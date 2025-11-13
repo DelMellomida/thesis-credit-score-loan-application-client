@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LoginForm } from '../components/auth/LoginForm';
 import { Header } from '../components/layout/Header';
 import { ProcessForm } from '../components/loan/ProcessForm';
@@ -58,6 +58,7 @@ export interface FormData {
 type ViewType = 'loan-process' | 'applicants-list' | 'applicant-overview';
 
 import { loadFormData, saveFormData, clearFormData } from '../lib/forms/storage';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 const INITIAL_FORM_DATA: FormData = {
   personal: {
@@ -104,6 +105,29 @@ export default function App() {
       newApplicant();
     }
   }, [user]);
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // If the URL includes a query to open the loan process, handle it
+  useEffect(() => {
+    try {
+      const v = searchParams?.get?.('view');
+      if (v === 'loan-process') {
+        newApplicant();
+        setCurrentView('loan-process');
+        // remove query param so it doesn't persist in the URL
+        try {
+          router.replace(window.location.pathname);
+        } catch (e) {
+          // ignore
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Initialize form data from storage or use initial data
   const [formData, setFormData] = useState<FormData>(() => {

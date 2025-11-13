@@ -1,5 +1,5 @@
 // Utility to transform frontend FormData to backend FullLoanApplicationRequest
-import { FormData } from '../app/page';
+import { FormData } from '../../app/page';
 import {
   EMPLOYMENT_SECTOR,
   SALARY_FREQUENCY,
