@@ -39,17 +39,98 @@ export default function Dashboard() {
   const { user } = useAuth();
   const token = user?.token;
 
+  // Helper to format labels (used by chart and print table)
+  const formatLabel = (label: string) => {
+    if (!label) return '';
+    try {
+      // month labels come as YYYY-MM
+      if (/^\d{4}-\d{2}$/.test(label)) {
+        const [y, m] = label.split('-');
+        const d = new Date(Number(y), Number(m) - 1, 1);
+        return d.toLocaleString(undefined, { month: 'short', year: 'numeric' });
+      }
+      // year labels YYYY
+      if (/^\d{4}$/.test(label)) return label;
+      // day labels ISO date
+      const d = new Date(label);
+      if (!isNaN(d.getTime())) return d.toLocaleDateString();
+    } catch (e) {
+      // fallback
+    }
+    return label;
+  };
+
   useEffect(() => { fetchReport(); }, []);
 
-  // Auto-refresh when filters or auth token change
+  // Normalize start/end formats when switching groupBy so inputs stay valid
   useEffect(() => {
-    // Only fetch when token is present
+    // When switching to daily view, ensure we have full YYYY-MM-DD strings
+    if (groupBy === 'day') {
+      const normalizeToDay = (val: string, isStart = true) => {
+        if (!val) return val;
+        if (/^\d{4}$/.test(val)) return isStart ? `${val}-01-01` : `${val}-12-31`;
+        if (/^\d{4}-\d{2}$/.test(val)) {
+          const [y, m] = val.split('-').map(Number);
+          if (isStart) return `${val}-01`;
+          const lastDay = new Date(y, m, 0).getDate();
+          return `${val}-${String(lastDay).padStart(2, '0')}`;
+        }
+        return val;
+      };
+
+      const ns = normalizeToDay(startDate, true);
+      const ne = normalizeToDay(endDate, false);
+      if (ns !== startDate) setStartDate(ns);
+      if (ne !== endDate) setEndDate(ne);
+      if (token) fetchReport({ startDate: ns, endDate: ne, groupBy: 'day' });
+      return;
+    }
+
+    // When switching to month view, prefer YYYY-MM
+    if (groupBy === 'month') {
+      const normalizeToMonth = (val: string) => {
+        if (!val) return val;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val.slice(0, 7);
+        if (/^\d{4}$/.test(val)) return `${val}-01`;
+        return val;
+      };
+      const ns = normalizeToMonth(startDate);
+      const ne = normalizeToMonth(endDate);
+      if (ns !== startDate) setStartDate(ns);
+      if (ne !== endDate) setEndDate(ne);
+      if (token) fetchReport({ startDate: ns, endDate: ne, groupBy: 'month' });
+      return;
+    }
+
+    // When switching to year view, prefer YYYY
+    if (groupBy === 'year') {
+      const normalizeToYear = (val: string) => {
+        if (!val) return val;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val.slice(0, 4);
+        if (/^\d{4}-\d{2}$/.test(val)) return val.slice(0, 4);
+        return val;
+      };
+      const ns = normalizeToYear(startDate);
+      const ne = normalizeToYear(endDate);
+      if (ns !== startDate) setStartDate(ns);
+      if (ne !== endDate) setEndDate(ne);
+      if (token) fetchReport({ startDate: ns, endDate: ne, groupBy: 'year' });
+      return;
+    }
+  }, [groupBy]);
+
+  // Auto-refresh when filters (dates) or auth token change
+  // Note: we intentionally exclude `groupBy` here to avoid firing a fetch
+  // with un-normalized date strings when switching group views. When the
+  // group changes, the normalization effect will call `fetchReport` with
+  // the normalized values.
+  useEffect(() => {
     if (!token) return;
     fetchReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, groupBy, token]);
+  }, [startDate, endDate, token]);
 
-  async function fetchReport() {
+  async function fetchReport(overrides?: { startDate?: string; endDate?: string; groupBy?: string }) {
     setLoading(true);
     setError(null);
     try {
@@ -59,7 +140,54 @@ export default function Dashboard() {
         setError('Not authenticated — please log in');
         return;
       }
-      const params = { start_date: startDate, end_date: endDate, group_by: groupBy };
+      // Allow callers to pass normalized overrides to avoid races when
+      // switching groupBy (for example Year -> Day). Use the overrides if
+      // provided, otherwise fall back to component state.
+      const localStart = overrides?.startDate ?? startDate;
+      const localEnd = overrides?.endDate ?? endDate;
+      const localGroup = overrides?.groupBy ?? groupBy;
+
+      // Build API params according to `localGroup` and `localStart`/`localEnd`.
+      const buildParams = () => {
+        if (localGroup === 'day') {
+          return { start_date: localStart, end_date: localEnd, group_by: localGroup };
+        }
+
+        if (localGroup === 'month') {
+          const parseYM = (val: string) => {
+            if (!val) return null;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val.slice(0, 7);
+            if (/^\d{4}-\d{2}$/.test(val)) return val;
+            return null;
+          };
+
+          const sYM = parseYM(localStart) || new Date().toISOString().slice(0,7);
+          const eYM = parseYM(localEnd) || new Date().toISOString().slice(0,7);
+          const [sY, sM] = sYM.split('-').map(Number);
+          const [eY, eM] = eYM.split('-').map(Number);
+          const s = `${sY.toString().padStart(4,'0')}-${sM.toString().padStart(2,'0')}-01`;
+          const lastDay = new Date(eY, eM, 0).getDate();
+          const e = `${eY.toString().padStart(4,'0')}-${eM.toString().padStart(2,'0')}-${lastDay.toString().padStart(2,'0')}`;
+          return { start_date: s, end_date: e, group_by: localGroup };
+        }
+
+        // year
+        const parseY = (val: string) => {
+          if (!val) return null;
+          if (/^\d{4}$/.test(val)) return val;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val.slice(0,4);
+          if (/^\d{4}-\d{2}$/.test(val)) return val.slice(0,4);
+          return null;
+        };
+
+        const sY = parseY(localStart) || new Date().getFullYear().toString();
+        const eY = parseY(localEnd) || new Date().getFullYear().toString();
+        const s = `${sY}-01-01`;
+        const e = `${eY}-12-31`;
+        return { start_date: s, end_date: e, group_by: localGroup };
+      };
+
+      const params = buildParams();
       const data = await getApplicantReport(params as any, token);
       setReport(data);
     } catch (err: any) {
@@ -119,9 +247,10 @@ export default function Dashboard() {
 
     html.push('<div class="by-status"><h3 style="margin:12px 0 6px 0">Time series</h3>');
     html.push('<table><thead><tr><th>Group</th><th>Count</th></tr></thead><tbody>');
-    (report.raw || []).forEach((r: any) => {
-      html.push('<tr><td>' + (r.group ?? '') + '</td><td>' + (r.count ?? 0) + '</td></tr>');
-    });
+      (report.raw || []).forEach((r: any) => {
+        const label = r.group ?? '';
+        html.push('<tr><td>' + (formatLabel(label) ?? '') + '</td><td>' + (r.count ?? 0) + '</td></tr>');
+      });
     html.push('</tbody></table>');
     html.push('</div>');
 
@@ -166,10 +295,11 @@ export default function Dashboard() {
 
   const timeseries = useMemo(() => {
     if (!report?.labels || !report?.series) return [];
-    return report.labels.map((label: string, idx: number) => ({
-      name: label,
+    const data = report.labels.map((label: string, idx: number) => ({
+      name: formatLabel(label),
       count: report.series[idx] ?? 0,
     }));
+    return data;
   }, [report]);
 
   const statusData = useMemo(() => {
@@ -235,21 +365,57 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="flex flex-col">
               <label className="text-sm font-medium text-gray-700 mb-2">Start Date</label>
-              <input 
-                className="px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-transparent transition" 
-                type="date" 
-                value={startDate} 
-                onChange={e => setStartDate(e.target.value)} 
-              />
+              {groupBy === 'day' ? (
+                <input
+                  className="px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+              ) : groupBy === 'month' ? (
+                <input
+                  className="px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+                  type="month"
+                  value={startDate.slice(0,7)}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+              ) : (
+                <input
+                  className="px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+                  type="number"
+                  min={1970}
+                  max={2100}
+                  value={startDate.slice(0,4)}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+              )}
             </div>
             <div className="flex flex-col">
               <label className="text-sm font-medium text-gray-700 mb-2">End Date</label>
-              <input 
-                className="px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-transparent transition" 
-                type="date" 
-                value={endDate} 
-                onChange={e => setEndDate(e.target.value)} 
-              />
+              {groupBy === 'day' ? (
+                <input
+                  className="px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                />
+              ) : groupBy === 'month' ? (
+                <input
+                  className="px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+                  type="month"
+                  value={endDate.slice(0,7)}
+                  onChange={e => setEndDate(e.target.value)}
+                />
+              ) : (
+                <input
+                  className="px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+                  type="number"
+                  min={1970}
+                  max={2100}
+                  value={endDate.slice(0,4)}
+                  onChange={e => setEndDate(e.target.value)}
+                />
+              )}
             </div>
             <div className="flex flex-col">
               <label className="text-sm font-medium text-gray-700 mb-2">Group By</label>
@@ -268,7 +434,7 @@ export default function Dashboard() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={fetchReport} 
+                  onClick={() => fetchReport()} 
                   disabled={loading}
                   className="flex-1 hover:bg-gray-50"
                 >
